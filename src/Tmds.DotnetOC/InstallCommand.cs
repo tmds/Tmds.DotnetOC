@@ -13,6 +13,12 @@ namespace Tmds.DotnetOC
         private readonly IOpenShift _openshift;
         private readonly IS2iRepo _s2iRepo;
 
+        [Option("-f|--force", Description = "Force installation.")]
+        public bool Force { get; }
+
+        [Option("--global", Description = "Install system-wide.")]
+        public bool Global { get; }
+
         public InstallCommand(IConsole console, IOpenShift openshift, IS2iRepo s2iRepo)
         {
             _console = console;
@@ -29,17 +35,24 @@ namespace Tmds.DotnetOC
                 return 1;
             }
 
-            bool community = false; // TODO, handle CentOS (community)
-            bool openshift = false; // TODO, handle openshift namespace
-
-            // Retrieve installed versions
-            _console.Write("Retrieving installed versions: ");
-            if (_openshift.GetImageTagVersions("dotnet", ocNamespace: openshift ? "openshift" : null)
-                          .CheckFailed(_console, out string[] namespaceVersions))
+            // Check if this is a community or RH supported version
+            if (_openshift.IsCommunity()
+                    .CheckFailed(_console, out bool community))
             {
                 return 1;
             }
-            _console.WriteLine(string.Join(", ", namespaceVersions)); // TODO: order versions
+
+            // Retrieve installed versions
+            _console.Write("Retrieving installed versions: ");
+            string ocNamespace = Global ? "openshift" : null;
+            if (_openshift.GetImageTagVersions("dotnet", ocNamespace: ocNamespace)
+                        .CheckFailed(_console, out ImageStreamTag[] namespaceStreamTags))
+            {
+                return 1;
+            }
+            string[] namespaceVersions = namespaceStreamTags.Select(t => t.Version).ToArray();
+            VersionStringSorter.Sort(namespaceVersions);
+            _console.WriteLine(string.Join(", ", namespaceVersions));
 
             // Retrieve latest versions
             _console.Write("Retrieving latest versions   : ");
@@ -49,26 +62,30 @@ namespace Tmds.DotnetOC
                 return 1;
             }
             string[] s2iVersions = ImageStreamListParser.GetTags(JObject.Parse(s2iImageStreams), "dotnet");
-            _console.WriteLine(string.Join(", ", s2iVersions)); // TODO: order versions
+            VersionStringSorter.Sort(s2iVersions);
+            _console.WriteLine(string.Join(", ", s2iVersions));
 
             _console.EmptyLine();
 
             // Compare installed and latest versions
-            IEnumerable<string> newVersions = s2iVersions.Except(namespaceVersions);
-            IEnumerable<string> removedVersions = namespaceVersions.Except(s2iVersions);
-            if (removedVersions.Any()) // TODO, Add force flag
+            if (!Force)
             {
-                _console.WriteErrorLine("namespace has unknown versions.");
-                return 1;
-            }
-            if (!newVersions.Any()) // TODO, Add force flag
-            {
-                _console.WriteLine("System already up-to-date.");
-                return 0;
+                IEnumerable<string> newVersions = s2iVersions.Except(namespaceVersions);
+                IEnumerable<string> removedVersions = namespaceVersions.Except(s2iVersions);
+                if (removedVersions.Any())
+                {
+                    _console.WriteErrorLine("Namespace has unknown versions. Use '--force' to overwrite.");
+                    return 1;
+                }
+                if (!newVersions.Any())
+                {
+                    _console.WriteLine("Already up-to-date. Use '--force' to sync all metadata.");
+                    return 0;
+                }
             }
 
             // Update installed versions
-            if (_openshift.Create(exists: namespaceVersions.Length != 0, content: s2iImageStreams)
+            if (_openshift.Create(exists: namespaceVersions.Length != 0, content: s2iImageStreams, ocNamespace: ocNamespace)
                           .CheckFailed(_console))
             {
                 return 1;

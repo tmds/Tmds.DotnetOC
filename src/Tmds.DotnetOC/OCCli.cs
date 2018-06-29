@@ -11,9 +11,29 @@ namespace Tmds.DotnetOC
 
         private Result Run(string arguments, string stdin = null) => ProcessUtils.Run("oc", arguments, stdin);
 
-        public Result<string[]> GetImageTagVersions(string name, string ocNamespace)
+        public Result<bool> IsCommunity()
         {
-            string arguments = $"get is -o json {(ocNamespace != null ? "--namespace {ocNamespace}" : "")} dotnet";
+            Result<ImageStreamTag[]> nodejsStreamTags = GetImageTagVersions("nodejs", ocNamespace: "openshift");
+            if (nodejsStreamTags.IsSuccess)
+            {
+                foreach (var tag in nodejsStreamTags.Value)
+                {
+                    if (tag.Image.Contains("registry.access.redhat.com"))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            else
+            {
+                return Result<bool>.Error("Cannot determine if this is a community installation.");
+            }
+        }
+
+        public Result<ImageStreamTag[]> GetImageTagVersions(string name, string ocNamespace)
+        {
+            string arguments = $"get is -o json {NamespaceArg(ocNamespace)} {name}";
             Result result = ProcessUtils.Run("oc", arguments);
             if (result.IsSuccess)
             {
@@ -22,12 +42,27 @@ namespace Tmds.DotnetOC
             }
             else
             {
-                // TODO Assume: not found
-                return Array.Empty<string>();
+                if (result.Content.Contains("NotFound"))
+                {
+                    return Array.Empty<ImageStreamTag>();
+                }
+                else
+                {
+                    return result;
+                }
             }
         }
 
-        public Result Create(bool exists, string content)
-            => Run((exists ? "replace" : "create") + " -f -", content);
+        private string NamespaceArg(string ocNamespace)
+        {
+            if (ocNamespace == null)
+            {
+                return string.Empty;
+            }
+            return $"--namespace {ocNamespace}";
+        }
+
+        public Result Create(bool exists, string content, string ocNamespace = null)
+            => Run((exists ? "replace" : "create") + " " + NamespaceArg(ocNamespace) + " -f -", content);
     }
 }

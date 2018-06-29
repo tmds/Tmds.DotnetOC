@@ -87,7 +87,7 @@ namespace Tmds.DotnetOC
             {
                 throw new InvalidOperationException();
             }
-            return Result.Error(val.Content);
+            return Result<T>.Error(val.Content);
         }
 
         public bool IsSuccess { get; }

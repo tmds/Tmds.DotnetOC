@@ -1,22 +1,25 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 
 namespace Tmds.DotnetOC
 {
     static class ImageStreamParser
     {
-        public static string[] GetTags(JObject imagestream)
+        public static ImageStreamTag[] GetTags(JObject imagestream)
         {
             JObject jobject = imagestream;
-            var versionList = new List<string>();
+            var versionList = new List<ImageStreamTag>();
             foreach (var tag in jobject["spec"]["tags"])
             {
                 string name = (string)tag["name"];
-                if (name != "latest")
+                string fromName = (string)tag["from"]["name"];
+                versionList.Add(new ImageStreamTag
                 {
-                    versionList.Add(name);
-                }
+                    Version = name,
+                    Image = fromName
+                });
             }
             return versionList.ToArray();
         }
@@ -32,7 +35,8 @@ namespace Tmds.DotnetOC
                 string name = (string)item["metadata"]["name"];
                 if (name == image)
                 {
-                    return ImageStreamParser.GetTags(item as JObject);
+                    return ImageStreamParser.GetTags(item as JObject)
+                        .Select(t => t.Version).ToArray();
                 }
             }
             return Array.Empty<string>();
