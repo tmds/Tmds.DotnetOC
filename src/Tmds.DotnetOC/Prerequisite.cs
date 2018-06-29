@@ -10,12 +10,12 @@ namespace Tmds.DotnetOC
 
         public static bool CheckOCHasContext(IConsole console)
         {
-            ProcessResult result = ProcessUtils.Run("oc", "whoami");
-            if (result.ExitCode != 0)
+            Result result = ProcessUtils.Run("oc", "whoami");
+            if (result.IsSuccess)
             {
-                console.WriteErrorLine($"No active context: {result.StandardError}");
+                console.WriteErrorLine($"No active context: {result.Content}");
             }
-            return result.ExitCode == 0;
+            return result.IsSuccess;
         }
 
         private static string[] s_splitPath = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(':');

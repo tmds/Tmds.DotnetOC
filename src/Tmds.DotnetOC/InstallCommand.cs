@@ -53,15 +53,15 @@ namespace Tmds.DotnetOC
                 return 0;
             }
 
-            ProcessResult result = ProcessUtils.Run("oc", $"{(namespaceVersions.Length == 0 ? "create" : "replace")} -f -", s2iImageStreams);
-            if (result.ExitCode == 0)
+            Result result = ProcessUtils.Run("oc", $"{(namespaceVersions.Length == 0 ? "create" : "replace")} -f -", s2iImageStreams);
+            if (result.IsSuccess)
             {
                 _console.WriteLine("Succesfully updated.");
                 return 0;
             }
             else
             {
-                _console.WriteErrorLine(result.StandardError);
+                _console.WriteErrorLine(result.Content);
                 return 1;
             }
         }
@@ -69,10 +69,10 @@ namespace Tmds.DotnetOC
         private static string[] GetDotnetImageStreamVersions(string ocNamespace = null)
         {
             string arguments = $"get is -o json {(ocNamespace != null ? "--namespace {ocNamespace}" : "")} dotnet";
-            ProcessResult result = ProcessUtils.Run("oc", arguments);
-            if (result.ExitCode == 0)
+            Result result = ProcessUtils.Run("oc", arguments);
+            if (result.IsSuccess)
             {
-                return ParseImageStreamVersions(result.StandardOut);
+                return ParseImageStreamVersions(result.Content);
             }
             else
             {

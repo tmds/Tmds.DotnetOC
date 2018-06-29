@@ -5,23 +5,16 @@ using System.Threading.Tasks;
 
 namespace Tmds.DotnetOC
 {
-    public class ProcessResult
-    {
-        public int ExitCode { get; set; }
-        public string StandardOut { get; set; }
-        public string StandardError { get; set; }
-    }
-
     static class ProcessUtils
     {
-        public static ProcessResult Run(string filename, string arguments, string stdin = null)
+        public static Result Run(string filename, string arguments, string stdin = null)
         {
             return RunAsync(filename, arguments, stdin).GetAwaiter().GetResult();
         }
 
-        public static Task<ProcessResult> RunAsync(string filename, string arguments, string stdin)
+        public static Task<Result> RunAsync(string filename, string arguments, string stdin)
         {
-            var tcs = new TaskCompletionSource<ProcessResult>();
+            var tcs = new TaskCompletionSource<Result>();
             Process process = null;
             try
             {
@@ -48,11 +41,10 @@ namespace Tmds.DotnetOC
                 };
                 process.Exited += (_, e) =>
                 {
-                    var processResult = new ProcessResult
+                    var processResult = new Result
                     {
-                        ExitCode = process.ExitCode,
-                        StandardError = sbError?.ToString() ?? string.Empty,
-                        StandardOut = sbOut.ToString()
+                        IsSuccess = process.ExitCode == 0,
+                        Content = process.ExitCode == 0 ? sbOut.ToString() : (sbError?.ToString() ?? "Unknown error")
                     };
                     tcs.SetResult(processResult);
                 };
