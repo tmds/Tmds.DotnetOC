@@ -7,6 +7,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Tmds.DotnetOC
 {
+    [Command(Description = "Install/Update .NET Core support on OpenShift.")]
     class InstallCommand
     {
         private readonly IConsole _console;
