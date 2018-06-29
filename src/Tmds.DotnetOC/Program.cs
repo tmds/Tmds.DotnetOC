@@ -4,6 +4,7 @@ using McMaster.Extensions.CommandLineUtils;
 namespace Tmds.DotnetOC
 {
     [Command(Name = "dotnet-oc")]
+    [Subcommand("install", typeof(InstallCommand))]
     class Program
     {
         public static int Main(string[] args)
