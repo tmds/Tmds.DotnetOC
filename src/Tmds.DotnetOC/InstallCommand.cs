@@ -16,7 +16,7 @@ namespace Tmds.DotnetOC
         [Option("-f|--force", Description = "Force installation.")]
         public bool Force { get; }
 
-        [Option("--global", Description = "Install system-wide.")]
+        [Option("-g|--global", Description = "Install system-wide.")]
         public bool Global { get; }
 
         public InstallCommand(IConsole console, IOpenShift openshift, IS2iRepo s2iRepo)
