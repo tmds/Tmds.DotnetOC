@@ -11,7 +11,7 @@ namespace Tmds.DotnetOC
         public static int Main(string[] args)
         {
             var services = new ServiceCollection()
-                .AddSingleton<IConsole>(PhysicalConsole.Singleton)
+                .AddSingleton<IConsole, PhysicalConsole>()
                 .BuildServiceProvider();
 
             var app = new CommandLineApplication<Program>();

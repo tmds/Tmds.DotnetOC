@@ -12,49 +12,56 @@ namespace Tmds.DotnetOC
         const string ImageStreamsUrl =          "https://raw.githubusercontent.com/redhat-developer/s2i-dotnetcore/master/dotnet_imagestreams.json";
         const string CommunityImageStreamsUrl = "https://raw.githubusercontent.com/redhat-developer/s2i-dotnetcore/master/dotnet_imagestreams_centos.json";
 
+        private IConsole _console;
+        public InstallCommand(IConsole console)
+        {
+            _console = console;
+        }
+
         async Task<int> OnExecuteAsync(CommandLineApplication app)
         {
-            if (!Prerequisite.CheckOCOnPath() ||
-                !Prerequisite.CheckOCHasContext())
+            if (!Prerequisite.CheckOCOnPath(_console) ||
+                !Prerequisite.CheckOCHasContext(_console))
             {
                 return 1;
             }
             bool community = false; // TODO, handle CentOS (community)
             bool openshift = false; // TODO, handle openshift namespace
 
-            Console.Write("Retrieving installed versions: "); Console.Out.Flush();
+            _console.Write("Retrieving installed versions: ");
             string[] namespaceVersions = GetDotnetImageStreamVersions(ocNamespace: openshift ? "openshift" : null);
-            System.Console.WriteLine(string.Join(", ", namespaceVersions)); // TODO: order versions
+            _console.WriteLine(string.Join(", ", namespaceVersions)); // TODO: order versions
 
-            Console.Write("Retrieving latest versions: "); Console.Out.Flush();
+            _console.Write("Retrieving latest versions   : ");
             string imageStreamsUrl = community ? CommunityImageStreamsUrl : ImageStreamsUrl;
             string s2iImageStreams = await HttpUtils.GetAsString(ImageStreamsUrl);
             string[] s2iVersions = ParseImageStreamListVersions(s2iImageStreams);
-            System.Console.WriteLine(string.Join(", ", s2iVersions)); // TODO: order versions
+            _console.WriteLine(string.Join(", ", s2iVersions)); // TODO: order versions
+
+            _console.EmptyLine();
 
             IEnumerable<string> newVersions = s2iVersions.Except(namespaceVersions);
             IEnumerable<string> removedVersions = namespaceVersions.Except(s2iVersions);
-
             if (removedVersions.Any()) // TODO, Add force flag
             {
-                System.Console.WriteLine("ERR: namespace has unknown versions.");
+                _console.WriteErrorLine("namespace has unknown versions.");
                 return 1;
             }
             if (!newVersions.Any()) // TODO, Add force flag
             {
-                System.Console.WriteLine("System already up-to-date.");
+                _console.WriteLine("System already up-to-date.");
                 return 0;
             }
 
             ProcessResult result = ProcessUtils.Run("oc", $"{(namespaceVersions.Length == 0 ? "create" : "replace")} -f -", s2iImageStreams);
             if (result.ExitCode == 0)
             {
-                System.Console.WriteLine("Succesfully updated.");
+                _console.WriteLine("Succesfully updated.");
                 return 0;
             }
             else
             {
-                System.Console.WriteLine($"ERR {result.StandardError}");
+                _console.WriteErrorLine(result.StandardError);
                 return 1;
             }
         }
