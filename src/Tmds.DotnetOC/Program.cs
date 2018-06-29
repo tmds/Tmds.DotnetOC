@@ -1,4 +1,5 @@
 ﻿using System;
+using Microsoft.Extensions.DependencyInjection;
 using McMaster.Extensions.CommandLineUtils;
 
 namespace Tmds.DotnetOC
@@ -8,7 +9,17 @@ namespace Tmds.DotnetOC
     class Program
     {
         public static int Main(string[] args)
-            => CommandLineApplication.Execute<Program>(args);
+        {
+            var services = new ServiceCollection()
+                .AddSingleton<IConsole>(PhysicalConsole.Singleton)
+                .BuildServiceProvider();
+
+            var app = new CommandLineApplication<Program>();
+            app.Conventions
+                .UseDefaultConventions()
+                .UseConstructorInjection(services);
+            return app.Execute(args);
+        }
 
         int OnExecute(CommandLineApplication app)
         {
