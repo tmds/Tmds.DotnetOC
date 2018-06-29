@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -42,10 +43,10 @@ namespace Tmds.DotnetOC
                 process.Exited += (_, e) =>
                 {
                     var processResult = new Result
-                    {
-                        IsSuccess = process.ExitCode == 0,
-                        Content = process.ExitCode == 0 ? sbOut.ToString() : (sbError?.ToString() ?? "Unknown error")
-                    };
+                    (
+                        process.ExitCode == 0,
+                        process.ExitCode == 0 ? sbOut.ToString() : sbError?.ToString()
+                    );
                     tcs.SetResult(processResult);
                 };
                 process.Start();
@@ -64,6 +65,19 @@ namespace Tmds.DotnetOC
                 tcs.SetException(e);
                 return tcs.Task;
             }
+        }
+
+        private static string[] s_splitPath = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(':');
+        public static Result ExistsOnPath(string program)
+        {
+            foreach (var pathDir in s_splitPath)
+            {
+                if (File.Exists(Path.Combine(pathDir, program)))
+                {
+                    return Result.Success();
+                }
+            }
+            return Result.Error($"The '{program}' binary cannot be found on PATH");
         }
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -5,12 +6,21 @@ namespace Tmds.DotnetOC
 {
     static class HttpUtils
     {
-        public static async Task<string> GetAsString(string url)
+        public static Result GetAsString(string url)
+            => GetAsStringAsync(url).GetAwaiter().GetResult();
+        public static async Task<Result> GetAsStringAsync(string url)
         {
-            using (var httpClient = new HttpClient())
+            try
             {
-                var response = await httpClient.GetAsync(url);
-                return await response.Content.ReadAsStringAsync();
+                using (var httpClient = new HttpClient())
+                {
+                    var response = await httpClient.GetAsync(url);
+                    return Result.Success(await response.Content.ReadAsStringAsync());
+                }
+            }
+            catch (Exception e)
+            {
+                return Result.Error(e.ToString());
             }
         }
     }
