@@ -1,15 +1,39 @@
 using System;
+using System.IO;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace Tmds.DotnetOC
 {
     class OCCli : IOpenShift
     {
-        public Result CheckDependencies() => ProcessUtils.ExistsOnPath("oc");
+        public Result CheckDependencies()
+        {
+            if (ProcessUtils.ExistsOnPath("oc"))
+            {
+                return Result.Success();
+            }
+            else
+            {
+                return Result.Error("Origin client tools ('oc') is not found on PATH. The program can be downloaded from https://github.com/openshift/origin/releases.");
+            }
+        }
 
-        public Result CheckConnection() => Run("whoami");
+        public Result CheckConnection()
+        {
+            Result result = Run("whoami");
+            if (result.IsSuccess)
+            {
+                return result;
+            }
+            else
+            {
+                return Result.Error($"Cannot connect to OpenShift cluster: {result.ErrorMessage}");
+            }
+        }
 
-        private Result Run(string arguments, string stdin = null) => ProcessUtils.Run("oc", arguments, stdin);
+        private Result Run(string arguments, JObject input = null)
+            => ProcessUtils.Run("oc", arguments, input);
 
         public Result<bool> IsCommunity()
         {
@@ -34,21 +58,20 @@ namespace Tmds.DotnetOC
         public Result<ImageStreamTag[]> GetImageTagVersions(string name, string ocNamespace)
         {
             string arguments = $"get is -o json {NamespaceArg(ocNamespace)} {name}";
-            Result result = ProcessUtils.Run("oc", arguments);
+            Result<JObject> result = ProcessUtils.RunAndGetJSon("oc", arguments);
             if (result.IsSuccess)
             {
-                JObject jobject = JObject.Parse(result.Content);
-                return ImageStreamParser.GetTags(jobject);
+                return ImageStreamParser.GetTags(result.Value);
             }
             else
             {
-                if (result.Content.Contains("NotFound"))
+                if (result.ErrorMessage.Contains("NotFound"))
                 {
                     return Array.Empty<ImageStreamTag>();
                 }
                 else
                 {
-                    return result;
+                    return Result<ImageStreamTag[]>.Error(result.ErrorMessage);
                 }
             }
         }
@@ -62,7 +85,9 @@ namespace Tmds.DotnetOC
             return $"--namespace {ocNamespace}";
         }
 
-        public Result Create(bool exists, string content, string ocNamespace = null)
-            => Run((exists ? "replace" : "create") + " " + NamespaceArg(ocNamespace) + " -f -", content);
+        public Result Create(bool exists, JObject content, string ocNamespace = null)
+        {
+            return Run((exists ? "replace" : "create") + " " + NamespaceArg(ocNamespace) + " -f -", content);
+        }
     }
 }

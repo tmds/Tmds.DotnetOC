@@ -58,11 +58,11 @@ namespace Tmds.DotnetOC
             // Retrieve latest versions
             _console.Write("Retrieving latest versions   : ");
             if (_s2iRepo.GetImageStreams(community)
-                        .CheckFailed(_console, out string s2iImageStreams))
+                        .CheckFailed(_console, out JObject s2iImageStreams))
             {
                 return 1;
             }
-            string[] s2iVersions = ImageStreamListParser.GetTags(JObject.Parse(s2iImageStreams), "dotnet");
+            string[] s2iVersions = ImageStreamListParser.GetTags(s2iImageStreams, "dotnet");
             VersionStringSorter.Sort(s2iVersions);
             _console.WriteLine(string.Join(", ", s2iVersions));
 

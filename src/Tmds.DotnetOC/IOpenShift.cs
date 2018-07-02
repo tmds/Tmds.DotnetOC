@@ -1,3 +1,5 @@
+using Newtonsoft.Json.Linq;
+
 namespace Tmds.DotnetOC
 {
     class ImageStreamTag
@@ -16,6 +18,6 @@ namespace Tmds.DotnetOC
 
         Result<ImageStreamTag[]> GetImageTagVersions(string name, string ocNamespace);
 
-        Result Create(bool exists, string content, string ocNamespace = null);
+        Result Create(bool exists, JObject content, string ocNamespace = null);
     }
 }
