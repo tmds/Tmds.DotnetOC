@@ -1,7 +1,9 @@
+using Newtonsoft.Json.Linq;
+
 namespace Tmds.DotnetOC
 {
     interface IS2iRepo
     {
-        Result GetImageStreams(bool community);
+        Result<JObject> GetImageStreams(bool community);
     }
 }

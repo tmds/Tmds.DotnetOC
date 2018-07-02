@@ -4,27 +4,25 @@ namespace Tmds.DotnetOC
 {
     class Result
     {
-        private static readonly Result s_success = new Result(isSuccess: true, content: string.Empty);
+        private static readonly Result s_success = new Result(isSuccess: true, errorMessage: null);
 
-        public Result(bool isSuccess, string content)
+        protected Result(bool isSuccess, string errorMessage)
         {
-            IsSuccess = isSuccess;
-            Content = content;
-        }
-
-        public static Result Success(string content = null)
-        {
-            if (string.IsNullOrEmpty(content))
+            if (!isSuccess && errorMessage == null)
             {
-                return s_success;
+                throw new ArgumentNullException(nameof(errorMessage));
             }
-            return new Result(isSuccess: true, content: content);
+            IsSuccess = isSuccess;
+            ErrorMessage = errorMessage;
         }
 
-        public static Result Error(string msg) => new Result(isSuccess: false, content: msg ?? "Unknown error");
+        public static Result Success() => s_success;
+        public static Result<T> Success<T>(T val) => Result<T>.Success(val);
+
+        public static Result Error(string errorMessage) => new Result(isSuccess: false, errorMessage: errorMessage);
 
         public bool IsSuccess { get; }
-        public string Content { get; }
+        public string ErrorMessage { get; }
     }
 
     static class ResultExtensions
@@ -33,21 +31,7 @@ namespace Tmds.DotnetOC
         {
             if (!result.IsSuccess)
             {
-                console.WriteErrorLine(result.Content);
-            }
-            return !result.IsSuccess;
-        }
-
-        public static bool CheckFailed(this Result result, IConsole console, out string val)
-        {
-            if (!result.IsSuccess)
-            {
-                console.WriteErrorLine(result.Content);
-                val = null;
-            }
-            else
-            {
-                val = result.Content;
+                console.WriteErrorLine(result.ErrorMessage);
             }
             return !result.IsSuccess;
         }
@@ -67,31 +51,20 @@ namespace Tmds.DotnetOC
         }
     }
 
-    class Result<T>
+    class Result<T> : Result
     {
-        public Result(bool isSuccess, T content, string errorMessage)
+        private Result(bool isSuccess, T content, string errorMessage)
+            : base(isSuccess, errorMessage)
         {
-            IsSuccess = isSuccess;
             Value = content;
-            ErrorMessage = errorMessage;
         }
 
-        public static Result<T> Error(string msg) => new Result<T>(isSuccess: false, content: default(T), errorMessage: msg ?? "Unknown error");
+        public static new Result<T> Error(string msg) => new Result<T>(isSuccess: false, content: default(T), errorMessage: msg ?? "Unknown error");
 
         public static Result<T> Success(T val) => new Result<T>(isSuccess: true, content: val, errorMessage: null);
 
         public static implicit operator Result<T>(T val) => Success(val);
-        public static implicit operator Result<T>(Result val)
-        {
-            if (val.IsSuccess)
-            {
-                throw new InvalidOperationException();
-            }
-            return Result<T>.Error(val.Content);
-        }
 
-        public bool IsSuccess { get; }
         public T Value { get; }
-        public string ErrorMessage { get; }
     }
 }

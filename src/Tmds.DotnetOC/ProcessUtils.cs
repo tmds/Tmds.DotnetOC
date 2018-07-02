@@ -3,19 +3,48 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Tmds.DotnetOC
 {
     static class ProcessUtils
     {
-        public static Result Run(string filename, string arguments, string stdin = null)
+        private class VoidType { }
+
+        public static Result Run(string filename, string arguments, JObject input)
         {
-            return RunAsync(filename, arguments, stdin).GetAwaiter().GetResult();
+            return Run(filename, arguments,
+                        streamWriter =>
+                        {
+                            if (input != null)
+                            {
+                                using (var writer = new JsonTextWriter(streamWriter))
+                                {
+                                    input.WriteTo(writer);
+                                }
+                            }
+                        });
         }
 
-        public static Task<Result> RunAsync(string filename, string arguments, string stdin)
+        public static Result<JObject> RunAndGetJSon(string filename, string arguments)
         {
-            var tcs = new TaskCompletionSource<Result>();
+            return Run<JObject>(filename, arguments, _ => JObject.Load(new JsonTextReader(new StreamReader(_.BaseStream))), null);
+        }
+
+        public static Result Run(string filename, string arguments, Action<StreamWriter> writeInput = null)
+        {
+            return RunAsync<VoidType>(filename, arguments, _ => null, writeInput).GetAwaiter().GetResult();
+        }
+
+        public static Result<T> Run<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput = null)
+        {
+            return RunAsync(filename, arguments, readOutput, writeInput).GetAwaiter().GetResult();
+        }
+
+        public static Task<Result<T>> RunAsync<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput)
+        {
+            var tcs = new TaskCompletionSource<Result<T>>();
             Process process = null;
             try
             {
@@ -28,10 +57,6 @@ namespace Tmds.DotnetOC
                 process.EnableRaisingEvents = true;
                 StringBuilder sbOut = new StringBuilder();
                 StringBuilder sbError = null;
-                process.OutputDataReceived += (_, e) =>
-                {
-                    sbOut.Append(e.Data);
-                };
                 process.ErrorDataReceived += (_, e) =>
                 {
                     if (sbError == null)
@@ -42,20 +67,20 @@ namespace Tmds.DotnetOC
                 };
                 process.Exited += (_, e) =>
                 {
-                    var processResult = new Result
-                    (
-                        process.ExitCode == 0,
-                        process.ExitCode == 0 ? sbOut.ToString() : sbError?.ToString()
-                    );
-                    tcs.SetResult(processResult);
+                    Result<T> retval;
+                    if (process.ExitCode == 0)
+                    {
+                        retval = Result<T>.Success(readOutput(process.StandardOutput));
+                    }
+                    else
+                    {
+                        retval = Result<T>.Error(sbError?.ToString() ?? $"exit code: {process.ExitCode}");
+                    }
+                    tcs.SetResult(retval);
                 };
                 process.Start();
-                process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
-                if (stdin != null)
-                {
-                    process.StandardInput.Write(stdin);
-                }
+                writeInput?.Invoke(process.StandardInput);
                 process.StandardInput.Close();
                 return tcs.Task;
             }
@@ -68,16 +93,16 @@ namespace Tmds.DotnetOC
         }
 
         private static string[] s_splitPath = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(':');
-        public static Result ExistsOnPath(string program)
+        public static bool ExistsOnPath(string program)
         {
             foreach (var pathDir in s_splitPath)
             {
                 if (File.Exists(Path.Combine(pathDir, program)))
                 {
-                    return Result.Success();
+                    return true;
                 }
             }
-            return Result.Error($"The '{program}' binary cannot be found on PATH");
+            return false;
         }
     }
 }
