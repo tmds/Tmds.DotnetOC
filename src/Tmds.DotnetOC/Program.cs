@@ -6,6 +6,7 @@ namespace Tmds.DotnetOC
 {
     [Command(Name = "dotnet-oc")]
     [Subcommand("install", typeof(InstallCommand))]
+    [Subcommand("app", typeof(AppCommand))]
     class Program
     {
         public static int Main(string[] args)

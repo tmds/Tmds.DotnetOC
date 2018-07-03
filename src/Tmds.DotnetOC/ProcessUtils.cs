@@ -32,6 +32,11 @@ namespace Tmds.DotnetOC
             return Run<JObject>(filename, arguments, _ => JObject.Load(new JsonTextReader(new StreamReader(_.BaseStream))), null);
         }
 
+        public static Result<string> RunAndGetString(string filename, string arguments)
+        {
+            return Run<string>(filename, arguments, _ => _.ReadToEnd(), null);
+        }
+
         public static Result Run(string filename, string arguments, Action<StreamWriter> writeInput = null)
         {
             return RunAsync<VoidType>(filename, arguments, _ => null, writeInput).GetAwaiter().GetResult();
