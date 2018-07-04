@@ -1,19 +1,19 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using McMaster.Extensions.CommandLineUtils;
 using Newtonsoft.Json.Linq;
 
 namespace Tmds.DotnetOC
 {
     [Command]
-    class AppNewCommand
+    class AppNewCommand : CommandBase
     {
-        private readonly IConsole _console;
         private readonly IOpenShift _openshift;
         public AppNewCommand(IConsole console, IOpenShift openshift)
+            : base(console)
         {
-            _console = console;
             _openshift = openshift;
         }
 
@@ -38,7 +38,7 @@ namespace Tmds.DotnetOC
         [Option("--runtime-version", CommandOptionType.SingleOrNoValue)]
         public string RuntimeVersion { get; }
 
-        private bool DetermineStartupProject(out string startupProjectFullName, out bool multipleProjectFiles)
+        private void DetermineStartupProject(out string startupProjectFullName, out bool multipleProjectFiles)
         {
             multipleProjectFiles = false;
             startupProjectFullName = StartupProject;
@@ -56,51 +56,40 @@ namespace Tmds.DotnetOC
                 var projFiles = Directory.GetFiles(startupProjectFullName, "*.??proj", SearchOption.TopDirectoryOnly);
                 if (projFiles.Length == 0)
                 {
-                    _console.WriteErrorLine("No projects found. Specify a '--startup-project'.");
-                    return false;
+                    Fail("No projects found. Specify a '--startup-project'.");
                 }
                 else if (projFiles.Length > 1)
                 {
-                    _console.WriteErrorLine("Multiple projects found. Specify a '--startup-project'.");
-                    return false;
+                    Fail("Multiple projects found. Specify a '--startup-project'.");
                 }
                 else
                 {
-                    System.Console.WriteLine($"Found project: {projFiles[0]}");
                     startupProjectFullName = Path.GetFullPath(projFiles[0]);
                     multipleProjectFiles = false;
                 }
             }
             else
             {
-                _console.WriteErrorLine("Startup project does not exist.");
-                return false;
+                Fail("Startup project does not exist.");
             }
-            return true;
         }
 
-        int OnExecute(CommandLineApplication app)
+        protected override async Task ExecuteAsync(CommandLineApplication app)
         {
             // Find the startup project file
-            if (!DetermineStartupProject(out string startupProjectFullName, out bool multipleProjectFiles))
-            {
-                return 1;
-            }
+            DetermineStartupProject(out string startupProjectFullName, out bool multipleProjectFiles);
 
             // Find git root
             string gitRoot = GitUtils.FindRepoRoot();
-            System.Console.WriteLine($"gitRoot: {gitRoot}");
             if (gitRoot == null)
             {
-                _console.WriteErrorLine("The current directory is not a git repository.");
-                return 1;
+                Fail("The current directory is not a git repository.");
             }
 
             // Verify the startup project is under the git root
             if (!startupProjectFullName.StartsWith(gitRoot) && startupProjectFullName[gitRoot.Length] == Path.DirectorySeparatorChar)
             {
-                _console.WriteErrorLine("The startup project is not in the current git repository.");
-                return 1;
+                Fail("The startup project is not in the current git repository.");
             }
 
             // Determine name
@@ -132,8 +121,7 @@ namespace Tmds.DotnetOC
             }
             if (gitUrl == null)
             {
-                _console.WriteErrorLine("Cannot determine git remote url. Specify a '--git-url'.");
-                return 1;
+                Fail("Cannot determine git remote url. Specify a '--git-url'.");
             }
 
             // Determine git ref
@@ -144,8 +132,7 @@ namespace Tmds.DotnetOC
             }
             if (gitRef == null)
             {
-                _console.WriteErrorLine("Cannot determine the current git branch. Specify '--git-ref'.");
-                return 1;
+                Fail("Cannot determine the current git branch. Specify '--git-ref'.");
             }
 
             // Determine runtime version            
@@ -163,8 +150,7 @@ namespace Tmds.DotnetOC
             }
             if (runtimeVersion == null)
             {
-                _console.WriteErrorLine("Cannot determine the runtime version. Specify '--runtime-version'.");
-                return 1;
+                Fail("Cannot determine the runtime version. Specify '--runtime-version'.");
             }
 
             // Determine sdk version
@@ -181,59 +167,36 @@ namespace Tmds.DotnetOC
             // Determine memory
             int memory = Memory;
 
-            System.Console.WriteLine($" - name            : {name}");
-            System.Console.WriteLine($" - git-url         : {gitUrl}");
-            System.Console.WriteLine($" - git-ref         : {gitRef}");
-            System.Console.WriteLine($" - startup-project : {startupProject}");
-            System.Console.WriteLine($" - runtime-version : {runtimeVersion}");
-            System.Console.WriteLine($" - sdk-version     : {sdkVersion}");
-            System.Console.WriteLine($" - memory (MB)     : {memory}");
+            PrintLine($" - name            : {name}");
+            PrintLine($" - git-url         : {gitUrl}");
+            PrintLine($" - git-ref         : {gitRef}");
+            PrintLine($" - startup-project : {startupProject}");
+            PrintLine($" - runtime-version : {runtimeVersion}");
+            PrintLine($" - sdk-version     : {sdkVersion}");
+            PrintLine($" - memory (MB)     : {memory}");
 
-            if (_openshift.CheckDependencies().CheckFailed(_console)
-             || _openshift.CheckConnection().CheckFailed(_console))
-            {
-                return 1;
-            }
+            _openshift.EnsureConnection();
 
-            ImageStreamTag[] streamTags;
             Func<ImageStreamTag, bool> FindRuntimeVersion = (ImageStreamTag tag) => tag.Version == runtimeVersion;
 
-            string imageNamespace;
-            if (_openshift.GetNamespace().CheckFailed(_console, out imageNamespace))
-            {
-                return -1;
-            }
-            if (_openshift.GetImageTagVersions("dotnet", imageNamespace)
-                        .CheckFailed(_console, out streamTags))
-            {
-                return 1;
-            }
+            string imageNamespace = _openshift.GetCurrentNamespace();
+            ImageStreamTag[] streamTags = _openshift.GetImageTagVersions("dotnet", imageNamespace);
             if (!streamTags.Any(FindRuntimeVersion))
             {
                 imageNamespace = "openshift";
-                if (_openshift.GetImageTagVersions("dotnet", imageNamespace)
-                        .CheckFailed(_console, out streamTags))
-                {
-                    return 1;
-                }
+                streamTags = _openshift.GetImageTagVersions("dotnet", imageNamespace);
                 if (!streamTags.Any(FindRuntimeVersion))
                 {
-                    _console.WriteErrorLine($"Runtime version {runtimeVersion} is not installed. Run the 'install' command.");
-                    return 1;
+                    Fail($"Runtime version {runtimeVersion} is not installed. Run the 'install' command.");
                 }
             }
 
             JObject buildConfig = CreateBuildConfig(name, imageNamespace, $"dotnet:{runtimeVersion}", gitUrl, gitRef, startupProject, sdkVersion);
-            System.Console.WriteLine(buildConfig);
+            Console.WriteLine(buildConfig);
 
             // TODO: oc create imagestream myapp
 
-            if (_openshift.Create(exists: false, content: buildConfig).CheckFailed(_console))
-            {
-                return 1;
-            }
-
-            return 0;
+            _openshift.Create(buildConfig);
         }
 
         private JObject CreateBuildConfig(string name, string imageNamespace, string imageTag, string gitUrl, string gitRef, string startupProject, string sdkVersion)

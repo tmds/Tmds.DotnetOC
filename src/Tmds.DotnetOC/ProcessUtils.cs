@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -10,44 +11,72 @@ namespace Tmds.DotnetOC
 {
     static class ProcessUtils
     {
-        private class VoidType { }
+        sealed class VoidType {
+            public static readonly VoidType Instance = new VoidType();
+        };
 
-        public static Result Run(string filename, string arguments, JObject input)
+        private static Func<StreamReader, JObject> s_JObjectReader = _ => JObject.Load(new JsonTextReader(new StreamReader(_.BaseStream)));
+        private static Func<StreamReader, string> s_StringReader = _ => _.ReadToEnd();
+
+        public static Result<TOut> Run<TOut>(string filename, string arguments)
+            => Run<VoidType, TOut>(filename, arguments, VoidType.Instance);
+
+        public static Result Run<TIn>(string filename, string arguments, TIn input)
+            => Run<TIn, VoidType>(filename, arguments, input);
+
+        public static Result<TOut> Run<TIn, TOut>(string filename, string arguments, TIn input)
         {
-            return Run(filename, arguments,
-                        streamWriter =>
-                        {
-                            if (input != null)
-                            {
-                                using (var writer = new JsonTextWriter(streamWriter))
-                                {
-                                    input.WriteTo(writer);
-                                }
-                            }
-                        });
+            Func<StreamReader, TOut> readOutput;
+
+            if (typeof(TOut) == typeof(JObject))
+            {
+                readOutput = (Func<StreamReader, TOut>)(object)s_JObjectReader;
+            }
+            else if (typeof(TOut) == typeof(string))
+            {
+                readOutput = (Func<StreamReader, TOut>)(object)s_StringReader;
+            }
+            else if (typeof(TOut) == typeof(VoidType))
+            {
+                readOutput = null;
+            }
+            else
+            {
+                throw new NotSupportedException($"Cannot read type {typeof(TOut).FullName}");
+            }
+
+            Action<StreamWriter>  writeInput;
+            if (typeof(TIn) == typeof(JObject))
+            {
+                writeInput = streamWriter => {
+                    using (var writer = new JsonTextWriter(streamWriter))
+                    {
+                        ((JObject)(object)input)?.WriteTo(writer); // TODO: get rid of Elvis
+                    }
+                };
+            }
+            else if (typeof(TIn) == typeof(string))
+            {
+                writeInput = writer => writer.Write(input.ToString());
+            }
+            else if (typeof(TIn) == typeof(VoidType))
+            {
+                writeInput = null;
+            }
+            else
+            {
+                throw new NotSupportedException($"Cannot write type {typeof(TIn).FullName}");
+            }
+
+            return Run(filename, arguments, readOutput, writeInput);
         }
 
-        public static Result<JObject> RunAndGetJSon(string filename, string arguments)
-        {
-            return Run<JObject>(filename, arguments, _ => JObject.Load(new JsonTextReader(new StreamReader(_.BaseStream))), null);
-        }
-
-        public static Result<string> RunAndGetString(string filename, string arguments)
-        {
-            return Run<string>(filename, arguments, _ => _.ReadToEnd(), null);
-        }
-
-        public static Result Run(string filename, string arguments, Action<StreamWriter> writeInput = null)
-        {
-            return RunAsync<VoidType>(filename, arguments, _ => null, writeInput).GetAwaiter().GetResult();
-        }
-
-        public static Result<T> Run<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput = null)
+        private static Result<T> Run<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput = null)
         {
             return RunAsync(filename, arguments, readOutput, writeInput).GetAwaiter().GetResult();
         }
 
-        public static Task<Result<T>> RunAsync<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput)
+        private static Task<Result<T>> RunAsync<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput)
         {
             var tcs = new TaskCompletionSource<Result<T>>();
             Process process = null;
@@ -75,7 +104,14 @@ namespace Tmds.DotnetOC
                     Result<T> retval;
                     if (process.ExitCode == 0)
                     {
-                        retval = Result<T>.Success(readOutput(process.StandardOutput));
+                        if (readOutput != null)
+                        {
+                            retval = Result<T>.Success(readOutput(process.StandardOutput));
+                        }
+                        else
+                        {
+                            retval = Result<T>.Success(default(T));
+                        }
                     }
                     else
                     {
@@ -92,8 +128,11 @@ namespace Tmds.DotnetOC
             catch (Exception e)
             {
                 process?.Dispose();
-                tcs.SetException(e);
-                return tcs.Task;
+                if (e is Win32Exception)
+                {
+                    throw new FailedException($"Executable '{filename} not found. Please install the application and add it to PATH.'");
+                }
+                throw;
             }
         }
 

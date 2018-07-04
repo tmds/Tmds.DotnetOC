@@ -8,7 +8,7 @@ using Newtonsoft.Json.Linq;
 namespace Tmds.DotnetOC
 {
     [Command(Description = "Install/Update .NET Core support on OpenShift.")]
-    class InstallCommand
+    class InstallCommand : CommandBase
     {
         private readonly IConsole _console;
         private readonly IOpenShift _openshift;
@@ -21,50 +21,34 @@ namespace Tmds.DotnetOC
         public bool Global { get; }
 
         public InstallCommand(IConsole console, IOpenShift openshift, IS2iRepo s2iRepo)
+            : base(console)
         {
             _console = console;
             _openshift = openshift;
             _s2iRepo = s2iRepo;
         }
 
-        async Task<int> OnExecuteAsync(CommandLineApplication app)
+        protected override async Task ExecuteAsync(CommandLineApplication app)
         {
-            // Check if we can connect to OpenShift
-            if (_openshift.CheckDependencies().CheckFailed(_console)
-             || _openshift.CheckConnection().CheckFailed(_console))
-            {
-                return 1;
-            }
+            _openshift.EnsureConnection();
 
             // Check if this is a community or RH supported version
-            if (_openshift.IsCommunity()
-                    .CheckFailed(_console, out bool community))
-            {
-                return 1;
-            }
+            bool community = _openshift.IsCommunity();
 
             // Retrieve installed versions
-            _console.Write("Retrieving installed versions: ");
+            Print("Retrieving installed versions: ");
             string ocNamespace = Global ? "openshift" : null;
-            if (_openshift.GetImageTagVersions("dotnet", ocNamespace: ocNamespace)
-                        .CheckFailed(_console, out ImageStreamTag[] namespaceStreamTags))
-            {
-                return 1;
-            }
+            ImageStreamTag[] namespaceStreamTags = _openshift.GetImageTagVersions("dotnet", ocNamespace: ocNamespace);
             string[] namespaceVersions = namespaceStreamTags.Select(t => t.Version).ToArray();
             VersionStringSorter.Sort(namespaceVersions);
-            _console.WriteLine(string.Join(", ", namespaceVersions));
+            PrintLine(string.Join(", ", namespaceVersions));
 
             // Retrieve latest versions
-            _console.Write("Retrieving latest versions   : ");
-            if (_s2iRepo.GetImageStreams(community)
-                        .CheckFailed(_console, out JObject s2iImageStreams))
-            {
-                return 1;
-            }
+            Print("Retrieving latest versions   : ");
+            JObject s2iImageStreams = _s2iRepo.GetImageStreams(community);
             string[] s2iVersions = ImageStreamListParser.GetTags(s2iImageStreams, "dotnet");
             VersionStringSorter.Sort(s2iVersions);
-            _console.WriteLine(string.Join(", ", s2iVersions));
+            PrintLine(string.Join(", ", s2iVersions));
 
             _console.EmptyLine();
 
@@ -75,24 +59,25 @@ namespace Tmds.DotnetOC
                 IEnumerable<string> removedVersions = namespaceVersions.Except(s2iVersions);
                 if (removedVersions.Any())
                 {
-                    _console.WriteErrorLine("Namespace has unknown versions. Use '--force' to overwrite.");
-                    return 1;
+                    Fail("Namespace has unknown versions. Use '--force' to overwrite.");
                 }
                 if (!newVersions.Any())
                 {
-                    _console.WriteLine("Already up-to-date. Use '--force' to sync all metadata.");
-                    return 0;
+                    PrintLine("Already up-to-date. Use '--force' to sync all metadata.");
+                    return;
                 }
             }
 
-            // Update installed versions
-            if (_openshift.Create(exists: namespaceVersions.Length != 0, content: s2iImageStreams, ocNamespace: ocNamespace)
-                          .CheckFailed(_console))
+            if (namespaceVersions.Length != 0)
             {
-                return 1;
+                _openshift.Replace(s2iImageStreams, ocNamespace);
             }
-            _console.WriteLine("Succesfully updated.");
-            return 0;
+            else
+            {
+                _openshift.Create(s2iImageStreams, ocNamespace);
+            }
+
+            PrintLine("Succesfully updated.");
         }
     }
 }

@@ -21,7 +21,7 @@ namespace Tmds.DotnetOC
 
         public static string GetRemoteUrl(string remoteName)
         {
-            Result<string> result = ProcessUtils.RunAndGetString("git", $"remote get-url {remoteName}");
+            Result<string> result = ProcessUtils.Run<string>("git", $"remote get-url {remoteName}");
             if (result.IsSuccess)
             {
                 return result.Value.Trim();
@@ -34,7 +34,7 @@ namespace Tmds.DotnetOC
 
         public static string GetCurrentBranch()
         {
-            Result<string> result = ProcessUtils.RunAndGetString("git", $"rev-parse --abbrev-ref HEAD");
+            Result<string> result = ProcessUtils.Run<string>("git", $"rev-parse --abbrev-ref HEAD");
             if (result.IsSuccess)
             {
                 return result.Value.Trim();

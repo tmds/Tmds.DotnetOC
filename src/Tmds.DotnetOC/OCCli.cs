@@ -7,58 +7,35 @@ namespace Tmds.DotnetOC
 {
     class OCCli : IOpenShift
     {
-        public Result CheckDependencies()
-        {
-            if (ProcessUtils.ExistsOnPath("oc"))
-            {
-                return Result.Success();
-            }
-            else
-            {
-                return Result.Error("Origin client tools ('oc') is not found on PATH. The program can be downloaded from https://github.com/openshift/origin/releases.");
-            }
-        }
-
-        public Result CheckConnection()
+        public void EnsureConnection()
         {
             Result result = Run("whoami");
-            if (result.IsSuccess)
+            if (!result.IsSuccess)
             {
-                return result;
-            }
-            else
-            {
-                return Result.Error($"Cannot connect to OpenShift cluster: {result.ErrorMessage}");
+                throw new FailedException($"Cannot connect to OpenShift cluster: {result.ErrorMessage}");
             }
         }
 
         private Result Run(string arguments, JObject input = null)
             => ProcessUtils.Run("oc", arguments, input);
 
-        public Result<bool> IsCommunity()
+        public bool IsCommunity()
         {
-            Result<ImageStreamTag[]> nodejsStreamTags = GetImageTagVersions("nodejs", ocNamespace: "openshift");
-            if (nodejsStreamTags.IsSuccess)
+            ImageStreamTag[] nodejsStreamTags = GetImageTagVersions("nodejs", ocNamespace: "openshift");
+            foreach (var tag in nodejsStreamTags)
             {
-                foreach (var tag in nodejsStreamTags.Value)
+                if (tag.Image.Contains("registry.access.redhat.com"))
                 {
-                    if (tag.Image.Contains("registry.access.redhat.com"))
-                    {
-                        return false;
-                    }
+                    return false;
                 }
-                return true;
             }
-            else
-            {
-                return Result<bool>.Error("Cannot determine if this is a community installation.");
-            }
+            return true;
         }
 
-        public Result<ImageStreamTag[]> GetImageTagVersions(string name, string ocNamespace)
+        public ImageStreamTag[] GetImageTagVersions(string name, string ocNamespace)
         {
             string arguments = $"get is -o json {NamespaceArg(ocNamespace)} {name}";
-            Result<JObject> result = ProcessUtils.RunAndGetJSon("oc", arguments);
+            Result<JObject> result = ProcessUtils.Run<JObject>("oc", arguments);
             if (result.IsSuccess)
             {
                 return ImageStreamParser.GetTags(result.Value);
@@ -71,7 +48,7 @@ namespace Tmds.DotnetOC
                 }
                 else
                 {
-                    return Result<ImageStreamTag[]>.Error(result.ErrorMessage);
+                    throw new FailedException($"Unable to retrieve image stream tags: {result.ErrorMessage}");
                 }
             }
         }
@@ -85,24 +62,31 @@ namespace Tmds.DotnetOC
             return $"--namespace {ocNamespace}";
         }
 
-        public Result Create(bool exists, JObject content, string ocNamespace = null)
+        public void Create(JObject value, string ocNamespace = null)
+            => RunCommand("create", ocNamespace, value);
+
+        public void Replace(JObject value, string ocNamespace = null)
+            => RunCommand("replace", ocNamespace, value);
+
+        private void RunCommand(string command, string ocNamespace, JObject value)
         {
-            return Run((exists ? "replace" : "create") + " " + NamespaceArg(ocNamespace) + " -f -", content);
+            Result result = Run(command + " " + NamespaceArg(ocNamespace) + " -f -", value);
+            if (!result.IsSuccess)
+            {
+                throw new FailedException($"Unable to '{command}': {result.ErrorMessage}");
+            }
         }
 
-        public Result Create(JObject content, string ocNamespace = null)
-            => Create(exists: false, content: content, ocNamespace: ocNamespace);
-
-        public Result<string> GetNamespace()
+        public string GetCurrentNamespace()
         {
-            Result<string> result = ProcessUtils.RunAndGetString("oc", "project -q");
+            Result<string> result = ProcessUtils.Run<string>("oc", "project -q");
             if (result.IsSuccess)
             {
-                return Result<string>.Success(result.Value.Trim());
+                return result.Value.Trim();
             }
             else
             {
-                return result;
+                throw new FailedException($"Cannot determine current project: {result.ErrorMessage}");
             }
         }
     }

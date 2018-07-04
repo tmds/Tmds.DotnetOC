@@ -10,16 +10,16 @@ namespace Tmds.DotnetOC
 
     interface IOpenShift
     {
-        Result<bool> IsCommunity();
+        bool IsCommunity();
 
-        Result CheckDependencies();
+        void EnsureConnection();
 
-        Result CheckConnection();
+        ImageStreamTag[] GetImageTagVersions(string name, string ocNamespace);
 
-        Result<ImageStreamTag[]> GetImageTagVersions(string name, string ocNamespace);
+        void Create(JObject content, string ocNamespace = null);
 
-        Result Create(bool exists, JObject content, string ocNamespace = null);
+        void Replace(JObject value, string ocNamespace = null);
 
-        Result<string> GetNamespace();
+        string GetCurrentNamespace();
     }
 }

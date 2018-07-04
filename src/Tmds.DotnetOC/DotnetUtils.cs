@@ -13,7 +13,7 @@ namespace Tmds.DotnetOC
 
         public static string GetSdkVersion()
         {
-            Result<string> result = ProcessUtils.RunAndGetString("dotnet", "--version");
+            Result<string> result = ProcessUtils.Run<string>("dotnet", "--version");
             if (result.IsSuccess)
             {
                 return result.Value.Trim();
