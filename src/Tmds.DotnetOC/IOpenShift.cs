@@ -19,5 +19,7 @@ namespace Tmds.DotnetOC
         Result<ImageStreamTag[]> GetImageTagVersions(string name, string ocNamespace);
 
         Result Create(bool exists, JObject content, string ocNamespace = null);
+
+        Result<string> GetNamespace();
     }
 }

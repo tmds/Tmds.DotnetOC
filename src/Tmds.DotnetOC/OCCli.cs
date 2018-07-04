@@ -89,5 +89,21 @@ namespace Tmds.DotnetOC
         {
             return Run((exists ? "replace" : "create") + " " + NamespaceArg(ocNamespace) + " -f -", content);
         }
+
+        public Result Create(JObject content, string ocNamespace = null)
+            => Create(exists: false, content: content, ocNamespace: ocNamespace);
+
+        public Result<string> GetNamespace()
+        {
+            Result<string> result = ProcessUtils.RunAndGetString("oc", "project -q");
+            if (result.IsSuccess)
+            {
+                return Result<string>.Success(result.Value.Trim());
+            }
+            else
+            {
+                return result;
+            }
+        }
     }
 }

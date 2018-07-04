@@ -1,5 +1,8 @@
+using System;
 using System.IO;
+using System.Linq;
 using McMaster.Extensions.CommandLineUtils;
+using Newtonsoft.Json.Linq;
 
 namespace Tmds.DotnetOC
 {
@@ -7,9 +10,11 @@ namespace Tmds.DotnetOC
     class AppNewCommand
     {
         private readonly IConsole _console;
-        public AppNewCommand(IConsole console)
+        private readonly IOpenShift _openshift;
+        public AppNewCommand(IConsole console, IOpenShift openshift)
         {
             _console = console;
+            _openshift = openshift;
         }
 
         [Option("-n|--name", CommandOptionType.SingleOrNoValue)]
@@ -183,7 +188,65 @@ namespace Tmds.DotnetOC
             System.Console.WriteLine($" - runtime-version : {runtimeVersion}");
             System.Console.WriteLine($" - sdk-version     : {sdkVersion}");
             System.Console.WriteLine($" - memory (MB)     : {memory}");
+
+            if (_openshift.CheckDependencies().CheckFailed(_console)
+             || _openshift.CheckConnection().CheckFailed(_console))
+            {
+                return 1;
+            }
+
+            ImageStreamTag[] streamTags;
+            Func<ImageStreamTag, bool> FindRuntimeVersion = (ImageStreamTag tag) => tag.Version == runtimeVersion;
+
+            string imageNamespace;
+            if (_openshift.GetNamespace().CheckFailed(_console, out imageNamespace))
+            {
+                return -1;
+            }
+            if (_openshift.GetImageTagVersions("dotnet", imageNamespace)
+                        .CheckFailed(_console, out streamTags))
+            {
+                return 1;
+            }
+            if (!streamTags.Any(FindRuntimeVersion))
+            {
+                imageNamespace = "openshift";
+                if (_openshift.GetImageTagVersions("dotnet", imageNamespace)
+                        .CheckFailed(_console, out streamTags))
+                {
+                    return 1;
+                }
+                if (!streamTags.Any(FindRuntimeVersion))
+                {
+                    _console.WriteErrorLine($"Runtime version {runtimeVersion} is not installed. Run the 'install' command.");
+                    return 1;
+                }
+            }
+
+            JObject buildConfig = CreateBuildConfig(name, imageNamespace, $"dotnet:{runtimeVersion}", gitUrl, gitRef, startupProject, sdkVersion);
+            System.Console.WriteLine(buildConfig);
+
+            // TODO: oc create imagestream myapp
+
+            if (_openshift.Create(exists: false, content: buildConfig).CheckFailed(_console))
+            {
+                return 1;
+            }
+
             return 0;
+        }
+
+        private JObject CreateBuildConfig(string name, string imageNamespace, string imageTag, string gitUrl, string gitRef, string startupProject, string sdkVersion)
+        {
+            string content = File.ReadAllText("buildconfig.json");
+            content = content.Replace("${NAME}", name);
+            content = content.Replace("${SOURCE_REPOSITORY_URL}", gitUrl);
+            content = content.Replace("${SOURCE_REPOSITORY_REF}", gitRef);
+            content = content.Replace("${NAMESPACE}", imageNamespace);
+            content = content.Replace("${DOTNET_IMAGE_STREAM_TAG}", imageTag);
+            content = content.Replace("${DOTNET_STARTUP_PROJECT}", startupProject);
+            content = content.Replace("${DOTNET_SDK_VERSION}", sdkVersion);
+            return JObject.Parse(content);
         }
     }
 }
