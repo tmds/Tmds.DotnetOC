@@ -187,25 +187,27 @@ namespace Tmds.DotnetOC
                 streamTags = _openshift.GetImageTagVersions("dotnet", imageNamespace);
                 if (!streamTags.Any(FindRuntimeVersion))
                 {
-                    Fail($"Runtime version {runtimeVersion} is not installed. Run the 'install' command.");
+                    Fail($"Runtime version {runtimeVersion} is not installed. You can run the 'install' command to install to the latest versions.");
                 }
             }
 
-            JObject buildConfig = CreateBuildConfig(name, imageNamespace, $"dotnet:{runtimeVersion}", gitUrl, gitRef, startupProject, sdkVersion);
+            string imageStreamName = name;
+            JObject buildConfig = CreateBuildConfig(name, imageStreamName, imageNamespace, $"dotnet:{runtimeVersion}", gitUrl, gitRef, startupProject, sdkVersion);
             Console.WriteLine(buildConfig);
 
-            // TODO: oc create imagestream myapp
+            _openshift.CreateImageStream(name);
 
             _openshift.Create(buildConfig);
         }
 
-        private JObject CreateBuildConfig(string name, string imageNamespace, string imageTag, string gitUrl, string gitRef, string startupProject, string sdkVersion)
+        private JObject CreateBuildConfig(string name, string imageStreamName, string imageNamespace, string imageTag, string gitUrl, string gitRef, string startupProject, string sdkVersion)
         {
             string content = File.ReadAllText("buildconfig.json");
             content = content.Replace("${NAME}", name);
+            content = content.Replace("${IMAGE_STREAM_NAME}", name);
             content = content.Replace("${SOURCE_REPOSITORY_URL}", gitUrl);
             content = content.Replace("${SOURCE_REPOSITORY_REF}", gitRef);
-            content = content.Replace("${NAMESPACE}", imageNamespace);
+            content = content.Replace("${DOTNET_IMAGE_NAMESPACE}", imageNamespace);
             content = content.Replace("${DOTNET_IMAGE_STREAM_TAG}", imageTag);
             content = content.Replace("${DOTNET_STARTUP_PROJECT}", startupProject);
             content = content.Replace("${DOTNET_SDK_VERSION}", sdkVersion);

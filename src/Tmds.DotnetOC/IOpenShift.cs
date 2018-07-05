@@ -20,6 +20,8 @@ namespace Tmds.DotnetOC
 
         void Replace(JObject value, string ocNamespace = null);
 
+        void CreateImageStream(string name);
+
         string GetCurrentNamespace();
     }
 }

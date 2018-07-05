@@ -33,7 +33,7 @@ namespace Tmds.DotnetOC
             _openshift.EnsureConnection();
 
             // Check if this is a community or RH supported version
-            bool community = _openshift.IsCommunity();
+            bool community = false;  _openshift.IsCommunity();
 
             // Retrieve installed versions
             Print("Retrieving installed versions: ");

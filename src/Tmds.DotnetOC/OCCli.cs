@@ -77,6 +77,19 @@ namespace Tmds.DotnetOC
             }
         }
 
+        public void CreateImageStream(string name)
+        {
+            Result result = Run($"create is {name}");
+            if (!result.IsSuccess)
+            {
+                if (result.ErrorMessage.Contains("AlreadyExists"))
+                {
+                    return;
+                }
+                throw new FailedException($"Error creating image stream: {result.ErrorMessage}");
+            }
+        }
+
         public string GetCurrentNamespace()
         {
             Result<string> result = ProcessUtils.Run<string>("oc", "project -q");
