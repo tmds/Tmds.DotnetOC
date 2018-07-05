@@ -17,31 +17,32 @@ namespace Tmds.DotnetOC
             _openshift = openshift;
         }
 
-        [Option("-n|--name", CommandOptionType.SingleOrNoValue)]
+        [Option("-n|--name", CommandOptionType.SingleValue)]
         public string Name { get; }
 
-        [Option("--git-url", CommandOptionType.SingleOrNoValue)]
+        [Option("--git-url", CommandOptionType.SingleValue)]
         public string GitUrl { get; }
 
-        [Option("--git-ref", CommandOptionType.SingleOrNoValue)]
+        [Option("--git-ref", CommandOptionType.SingleValue)]
         public string GitRef { get; }
 
-        [Option("--sdk-version", CommandOptionType.SingleOrNoValue)]
+        [Option("--sdk-version", CommandOptionType.SingleValue)]
         public string SdkVerison { get; }
 
-        [Option("--memory", CommandOptionType.SingleOrNoValue)]
+        [Option("--memory", CommandOptionType.SingleValue)]
         public int Memory { get; } = 100;
 
-        [Option("--startup-project", CommandOptionType.SingleOrNoValue)]
+        [Option("--startup-project", CommandOptionType.SingleValue)]
         public string StartupProject { get; }
 
-        [Option("--runtime-version", CommandOptionType.SingleOrNoValue)]
+        [Option("--runtime-version", CommandOptionType.SingleValue)]
         public string RuntimeVersion { get; }
 
-        private void DetermineStartupProject(out string startupProjectFullName, out bool multipleProjectFiles)
+        protected override async Task ExecuteAsync(CommandLineApplication app)
         {
-            multipleProjectFiles = false;
-            startupProjectFullName = StartupProject;
+            // Find the startup project file
+            bool multipleProjectFiles = false;
+            string startupProjectFullName = StartupProject;
             if (startupProjectFullName == null)
             {
                 startupProjectFullName = ".";
@@ -72,15 +73,9 @@ namespace Tmds.DotnetOC
             {
                 Fail("Startup project does not exist.");
             }
-        }
-
-        protected override async Task ExecuteAsync(CommandLineApplication app)
-        {
-            // Find the startup project file
-            DetermineStartupProject(out string startupProjectFullName, out bool multipleProjectFiles);
 
             // Find git root
-            string gitRoot = GitUtils.FindRepoRoot();
+            string gitRoot = GitUtils.FindRepoRoot(Path.GetDirectoryName(startupProjectFullName));
             if (gitRoot == null)
             {
                 Fail("The current directory is not a git repository.");
@@ -113,10 +108,10 @@ namespace Tmds.DotnetOC
             string gitUrl = GitUrl;
             if (gitUrl == null)
             {
-                gitUrl = GitUtils.GetRemoteUrl("openshift-origin");
+                gitUrl = GitUtils.GetRemoteUrl(gitRoot, "openshift-origin");
                 if (gitUrl == null)
                 {
-                    gitUrl = GitUtils.GetRemoteUrl("origin");
+                    gitUrl = GitUtils.GetRemoteUrl(gitRoot, "origin");
                 }
             }
             if (gitUrl == null)
@@ -128,7 +123,7 @@ namespace Tmds.DotnetOC
             string gitRef = GitRef;
             if (gitRef == null)
             {
-                gitRef = GitUtils.GetCurrentBranch();
+                gitRef = GitUtils.GetCurrentBranch(gitRoot);
             }
             if (gitRef == null)
             {

@@ -28,10 +28,6 @@
                     {
                         "name": "DOTNET_SDK_VERSION",
                         "value": "${DOTNET_SDK_VERSION}"
-                    },
-                    {
-                        "name": "BUILD_LOGLEVEL",
-                        "value": "9"
                     }
                 ]
             }

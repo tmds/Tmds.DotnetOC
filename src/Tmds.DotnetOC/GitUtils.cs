@@ -1,12 +1,12 @@
+using System.Diagnostics;
 using System.IO;
 
 namespace Tmds.DotnetOC
 {
     static class GitUtils
     {
-        public static string FindRepoRoot()
+        public static string FindRepoRoot(string dir)
         {
-            string dir = Directory.GetCurrentDirectory();
             do
             {
                 if (Directory.Exists($"{dir}/.git"))
@@ -19,9 +19,9 @@ namespace Tmds.DotnetOC
             return null;
         }
 
-        public static string GetRemoteUrl(string remoteName)
+        public static string GetRemoteUrl(string gitRoot, string remoteName)
         {
-            Result<string> result = ProcessUtils.Run<string>("git", $"remote get-url {remoteName}");
+            Result<string> result = ProcessUtils.Run<string>("git", $"remote get-url {remoteName}", new ProcessStartInfo { WorkingDirectory = gitRoot });
             if (result.IsSuccess)
             {
                 return result.Value.Trim();
@@ -32,9 +32,9 @@ namespace Tmds.DotnetOC
             }
         }
 
-        public static string GetCurrentBranch()
+        public static string GetCurrentBranch(string gitRoot)
         {
-            Result<string> result = ProcessUtils.Run<string>("git", $"rev-parse --abbrev-ref HEAD");
+            Result<string> result = ProcessUtils.Run<string>("git", $"rev-parse --abbrev-ref HEAD", new ProcessStartInfo { WorkingDirectory = gitRoot });
             if (result.IsSuccess)
             {
                 return result.Value.Trim();
