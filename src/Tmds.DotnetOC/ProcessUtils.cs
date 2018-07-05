@@ -18,13 +18,13 @@ namespace Tmds.DotnetOC
         private static Func<StreamReader, JObject> s_JObjectReader = _ => JObject.Load(new JsonTextReader(new StreamReader(_.BaseStream)));
         private static Func<StreamReader, string> s_StringReader = _ => _.ReadToEnd();
 
-        public static Result<TOut> Run<TOut>(string filename, string arguments)
-            => Run<VoidType, TOut>(filename, arguments, VoidType.Instance);
+        public static Result<TOut> Run<TOut>(string filename, string arguments, ProcessStartInfo psi = null)
+            => Run<VoidType, TOut>(filename, arguments, VoidType.Instance, psi);
 
-        public static Result Run<TIn>(string filename, string arguments, TIn input)
-            => Run<TIn, VoidType>(filename, arguments, input);
+        public static Result Run<TIn>(string filename, string arguments, TIn input, ProcessStartInfo psi = null)
+            => Run<TIn, VoidType>(filename, arguments, input, psi);
 
-        public static Result<TOut> Run<TIn, TOut>(string filename, string arguments, TIn input)
+        public static Result<TOut> Run<TIn, TOut>(string filename, string arguments, TIn input, ProcessStartInfo psi = null)
         {
             Func<StreamReader, TOut> readOutput;
 
@@ -68,26 +68,30 @@ namespace Tmds.DotnetOC
                 throw new NotSupportedException($"Cannot write type {typeof(TIn).FullName}");
             }
 
-            return Run(filename, arguments, readOutput, writeInput);
+            return Run(filename, arguments, readOutput, writeInput, psi);
         }
 
-        private static Result<T> Run<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput = null)
+        private static Result<T> Run<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput, ProcessStartInfo psi)
         {
-            return RunAsync(filename, arguments, readOutput, writeInput).GetAwaiter().GetResult();
+            return RunAsync(filename, arguments, readOutput, writeInput, psi).GetAwaiter().GetResult();
         }
 
-        private static Task<Result<T>> RunAsync<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput)
+        private static Task<Result<T>> RunAsync<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput, ProcessStartInfo psi)
         {
             var tcs = new TaskCompletionSource<Result<T>>();
             Process process = null;
             try
             {
-                process = new Process();
-                process.StartInfo.FileName = filename;
-                process.StartInfo.Arguments = arguments;
-                process.StartInfo.RedirectStandardError = true;
-                process.StartInfo.RedirectStandardOutput = true;
-                process.StartInfo.RedirectStandardInput = true;
+                if (psi == null)
+                {
+                    psi = new ProcessStartInfo();
+                }
+                psi.FileName = filename;
+                psi.Arguments = arguments;
+                psi.RedirectStandardError = true;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardInput = true;
+                process = Process.Start(psi);
                 process.EnableRaisingEvents = true;
                 StringBuilder sbOut = new StringBuilder();
                 StringBuilder sbError = null;
