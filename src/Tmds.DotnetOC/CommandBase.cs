@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using McMaster.Extensions.CommandLineUtils;
 
@@ -7,6 +8,27 @@ namespace Tmds.DotnetOC
     abstract class CommandBase
     {
         private readonly IConsole _console;
+
+        protected Action<StreamReader> ReadToConsole
+        {
+            get
+            {
+                return reader => {
+                    while (true)
+                    {
+                        string line = reader.ReadLine();
+                        if (line != null)
+                        {
+                            PrintLine(line);
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    };
+                };
+            }
+        }
 
         protected void Print(string msg)
         {

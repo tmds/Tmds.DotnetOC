@@ -82,6 +82,7 @@ namespace Tmds.DotnetOC
             Result result = Run($"create is {name}");
             if (!result.IsSuccess)
             {
+                // TODO: ???
                 if (result.ErrorMessage.Contains("AlreadyExists"))
                 {
                     return;
@@ -100,6 +101,45 @@ namespace Tmds.DotnetOC
             else
             {
                 throw new FailedException($"Cannot determine current project: {result.ErrorMessage}");
+            }
+        }
+
+        public Build GetLatestBuild(string buildConfigName)
+        {
+            Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get builds -l openshift.io/build-config.name={buildConfigName} -o json");
+            if (result.IsSuccess)
+            {
+                return BuildParser.GetLatestBuild(result.Value, buildConfigName);
+            }
+            else
+            {
+                throw new FailedException($"Cannot get build information: {result.ErrorMessage}");
+            }
+        }
+
+        public void GetLog(string podName, Action<StreamReader> reader)
+        {
+            Result result = ProcessUtils.Run("oc", $"logs -f {podName}", reader);
+            if (!result.IsSuccess)
+            {
+                throw new FailedException($"Cannot get pod log: {result.ErrorMessage}");
+            }
+        }
+
+        public Pod GetPod(string podName, bool mustExist)
+        {
+            Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get pod {podName} -o json");
+            if (result.IsSuccess)
+            {
+                return PodParser.Parse(result.Value);
+            }
+            else
+            {
+                if (!mustExist && result.ErrorMessage.Contains("NotFound"))
+                {
+                    return null;
+                }
+                throw new FailedException($"Cannot get build information: {result.ErrorMessage}");
             }
         }
     }

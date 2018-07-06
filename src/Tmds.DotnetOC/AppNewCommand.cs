@@ -182,11 +182,45 @@ namespace Tmds.DotnetOC
 
             string imageStreamName = name;
             JObject buildConfig = CreateBuildConfig(name, imageStreamName, imageNamespace, $"dotnet:{runtimeVersion}", gitUrl, gitRef, startupProject, sdkVersion);
-            Console.WriteLine(buildConfig);
 
             _openshift.CreateImageStream(name);
 
             _openshift.Create(buildConfig);
+
+            PrintLine($"Creating build pod.");
+            Build build = null;
+            while (true)
+            {
+                build = _openshift.GetLatestBuild(name);
+                if (build.Phase != "Pending")
+                {
+                    break;
+                }
+                System.Threading.Thread.Sleep(1000);
+            }
+            PrintLine($"Starting build on {build.PodName}.");
+            bool podFound = false;
+            while (true)
+            {
+                Pod pod = _openshift.GetPod(build.PodName, mustExist: false);
+                if (pod == null || pod.Phase != "Pending")
+                {
+                    podFound = pod != null;
+                    break;
+                }
+                System.Threading.Thread.Sleep(1000);
+            }
+            if (podFound)
+            {
+                PrintLine("Build log:");
+                _openshift.GetLog(build.PodName, ReadToConsole);
+            }
+            build = _openshift.GetLatestBuild(name); // TODO: build number!!
+            if (build.Phase != "Complete")
+            {
+                Fail($"The build failed: {build.Phase}({build.Reason}): {build.StatusMessage}");
+            }
+            PrintLine("Build finished succesfully.");
         }
 
         private JObject CreateBuildConfig(string name, string imageStreamName, string imageNamespace, string imageTag, string gitUrl, string gitRef, string startupProject, string sdkVersion)

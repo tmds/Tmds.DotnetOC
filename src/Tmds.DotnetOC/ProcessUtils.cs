@@ -71,72 +71,72 @@ namespace Tmds.DotnetOC
             return Run(filename, arguments, readOutput, writeInput, psi);
         }
 
+        public static Result Run(string filename, string arguments, Action<StreamReader> readOutput)
+            => Run<VoidType>(filename, arguments,
+                reader => {
+                    readOutput(reader);
+                    return VoidType.Instance; },
+                writeInput: null, psi: null);
+
         private static Result<T> Run<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput, ProcessStartInfo psi)
         {
-            return RunAsync(filename, arguments, readOutput, writeInput, psi).GetAwaiter().GetResult();
-        }
-
-        private static Task<Result<T>> RunAsync<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput, ProcessStartInfo psi)
-        {
-            var tcs = new TaskCompletionSource<Result<T>>();
+            if (psi == null)
+            {
+                psi = new ProcessStartInfo();
+            }
+            psi.FileName = filename;
+            psi.Arguments = arguments;
+            psi.RedirectStandardError = true;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardInput = true;
             Process process = null;
             try
             {
-                if (psi == null)
-                {
-                    psi = new ProcessStartInfo();
-                }
-                psi.FileName = filename;
-                psi.Arguments = arguments;
-                psi.RedirectStandardError = true;
-                psi.RedirectStandardOutput = true;
-                psi.RedirectStandardInput = true;
                 process = Process.Start(psi);
-                process.EnableRaisingEvents = true;
-                StringBuilder sbOut = new StringBuilder();
-                StringBuilder sbError = null;
-                process.ErrorDataReceived += (_, e) =>
-                {
-                    if (sbError == null)
-                    {
-                        sbError = new StringBuilder();
-                    }
-                    sbError.Append(e.Data);
-                };
-                process.Exited += (_, e) =>
-                {
-                    Result<T> retval;
-                    if (process.ExitCode == 0)
-                    {
-                        if (readOutput != null)
-                        {
-                            retval = Result<T>.Success(readOutput(process.StandardOutput));
-                        }
-                        else
-                        {
-                            retval = Result<T>.Success(default(T));
-                        }
-                    }
-                    else
-                    {
-                        retval = Result<T>.Error(sbError?.ToString() ?? $"exit code: {process.ExitCode}");
-                    }
-                    tcs.SetResult(retval);
-                };
-                process.Start();
-                process.BeginErrorReadLine();
                 writeInput?.Invoke(process.StandardInput);
                 process.StandardInput.Close();
-                return tcs.Task;
+                Result<T> result = null;
+                Exception outputReadException = null;
+                if (readOutput != null)
+                {
+                    try
+                    {
+                        result = Result<T>.Success(readOutput(process.StandardOutput));
+                    }
+                    catch (Exception e)
+                    {
+                        outputReadException = e;
+                    }
+                }
+                else
+                {
+                    result = Result<T>.Success(default(T));
+                }
+                process.WaitForExit();
+                if (process.ExitCode == 0)
+                {
+                    if (outputReadException != null)
+                    {
+                        throw outputReadException;
+                    }
+                    return result;
+                }
+                else
+                {
+                    return Result<T>.Error(process.StandardError.ReadToEnd());
+                }
             }
             catch (Exception e)
             {
-                process?.Dispose();
                 if (e is Win32Exception)
                 {
                     throw new FailedException($"Executable '{filename} not found. Please install the application and add it to PATH.'");
                 }
                 throw;
+            }
+            finally
+            {
+                process?.Dispose();
             }
         }
 

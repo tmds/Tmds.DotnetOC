@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using Newtonsoft.Json.Linq;
 
 namespace Tmds.DotnetOC
@@ -6,6 +8,19 @@ namespace Tmds.DotnetOC
     {
         public string Version { get; set; }
         public string Image { get; set ;}
+    }
+
+    class Build
+    {
+        public string PodName { get; set; }
+        public string StatusMessage { get; set; }
+        public string Phase { get; set; }
+        public string Reason { get; set; }
+    }
+
+    class Pod
+    {
+        public string Phase { get; set; }
     }
 
     interface IOpenShift
@@ -23,5 +38,11 @@ namespace Tmds.DotnetOC
         void CreateImageStream(string name);
 
         string GetCurrentNamespace();
+
+        Build GetLatestBuild(string buildConfigName);
+
+        void GetLog(string podName, Action<StreamReader> reader);
+
+        Pod GetPod(string podName, bool mustExist = true);
     }
 }
