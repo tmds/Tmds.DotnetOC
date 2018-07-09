@@ -55,7 +55,7 @@ namespace Tmds.DotnetOC
 
         string GetCurrentNamespace();
 
-        Build GetLatestBuild(string buildConfigName);
+        Build GetLatestBuild(string buildConfigName, bool mustExist = true);
 
         void GetLog(string podName, Action<StreamReader> reader, bool follow = false);
 

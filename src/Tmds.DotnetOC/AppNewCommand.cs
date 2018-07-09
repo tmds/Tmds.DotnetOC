@@ -196,12 +196,12 @@ namespace Tmds.DotnetOC
             _openshift.Create(buildConfig);
 
             // Wait for build
-            PrintLine($"Creating build pod.");
+            PrintLine($"Waiting for build.");
             Build build = null;
             while (true)
             {
-                build = _openshift.GetLatestBuild(buildConfigName); // TODO: may not exist?
-                if (build.Phase != "Pending")
+                build = _openshift.GetLatestBuild(buildConfigName, mustExist: false);
+                if (build != null && build.Phase != "Pending")
                 {
                     break;
                 }
@@ -209,7 +209,7 @@ namespace Tmds.DotnetOC
             }
 
             // Wait for build pod
-            PrintLine($"Starting build on {build.PodName}.");
+            PrintLine($"Build started on {build.PodName}.");
             bool podFound = false;
             while (true)
             {

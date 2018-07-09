@@ -102,7 +102,7 @@ namespace Tmds.DotnetOC
             }
         }
 
-        public Build GetLatestBuild(string buildConfigName)
+        public Build GetLatestBuild(string buildConfigName, bool mustExist)
         {
             Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get builds -l openshift.io/build-config.name={buildConfigName} -o json");
             if (result.IsSuccess)
@@ -111,6 +111,10 @@ namespace Tmds.DotnetOC
             }
             else
             {
+                if (!mustExist && result.ErrorMessage.Contains("NotFound"))
+                {
+                    return null;
+                }
                 throw new FailedException($"Cannot get build information: {result.ErrorMessage}");
             }
         }
