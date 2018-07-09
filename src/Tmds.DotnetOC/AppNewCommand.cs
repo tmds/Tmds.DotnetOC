@@ -325,6 +325,14 @@ namespace Tmds.DotnetOC
             {
                 PrintLine("Deployment finished succesfull.");
             }
+
+            PrintLine("Creating service.");
+            // Service
+            JObject service = CreateService(name);
+            _openshift.Create(service);
+
+
+            PrintLine("Application created succesfully.");
         }
 
         private JObject CreateBuildConfig(string name, string imageStreamName, string imageNamespace, string imageTag, string gitUrl, string gitRef, string startupProject, string sdkVersion)
@@ -347,6 +355,13 @@ namespace Tmds.DotnetOC
             content = content.Replace("${NAME}", name);
             content = content.Replace("${IMAGE_STREAM_NAME}", imageStreamName);
             content = content.Replace("${MEMORY_LIMIT}", memoryLimit.ToString());
+            return JObject.Parse(content);
+        }
+
+        private JObject CreateService(string name)
+        {
+            string content = File.ReadAllText("service.json");
+            content = content.Replace("${NAME}", name);
             return JObject.Parse(content);
         }
     }

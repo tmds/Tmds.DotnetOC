@@ -1,0 +1,19 @@
+{
+    "kind": "Service",
+    "apiVersion": "v1",
+    "metadata": {
+        "name": "${NAME}"
+    },
+    "spec": {
+        "ports": [
+            {
+                "name": "web",
+                "port": 8080,
+                "targetPort": 8080
+            }
+        ],
+        "selector": {
+            "name": "${NAME}"
+        }
+    }
+}
