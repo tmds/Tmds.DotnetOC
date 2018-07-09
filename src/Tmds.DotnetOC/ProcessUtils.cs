@@ -83,6 +83,7 @@ namespace Tmds.DotnetOC
 
         private static Result<T> Run<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput, ProcessStartInfo psi)
         {
+            System.Console.WriteLine($"Executing {filename} {arguments}");
             if (psi == null)
             {
                 psi = new ProcessStartInfo();

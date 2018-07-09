@@ -80,11 +80,6 @@ namespace Tmds.DotnetOC
             Result result = ProcessUtils.Run("oc", $"create is {name}");
             if (!result.IsSuccess)
             {
-                // TODO: ???
-                if (result.ErrorMessage.Contains("AlreadyExists"))
-                {
-                    return;
-                }
                 throw new FailedException($"Error creating image stream: {result.ErrorMessage}");
             }
         }
