@@ -62,7 +62,7 @@ namespace Tmds.DotnetOC
 
         Pod GetPod(string podName, bool mustExist = true);
 
-        ReplicationController GetReplicationController(string deploymentConfigName, string version);
+        ReplicationController GetReplicationController(string deploymentConfigName, string version, bool mustExist = true);
 
         DeploymentPod[] GetDeploymentPods(string deploymentConfigName, string version);
     }

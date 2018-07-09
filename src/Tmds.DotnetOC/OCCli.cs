@@ -167,7 +167,7 @@ namespace Tmds.DotnetOC
             }
         }
 
-        public ReplicationController GetReplicationController(string deploymentConfigName, string version)
+        public ReplicationController GetReplicationController(string deploymentConfigName, string version, bool mustExist)
         {
             Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get rc -l openshift.io/deployment-config.name={deploymentConfigName} -o json");
             if (result.IsSuccess)
@@ -180,10 +180,18 @@ namespace Tmds.DotnetOC
                         return rc;
                     }
                 }
+                if (!mustExist)
+                {
+                    return null;
+                }
                 throw new FailedException("Replication controller not found");
             }
             else
             {
+                if (!mustExist && result.ErrorMessage.Contains("NotFound"))
+                {
+                    return null;
+                }
                 throw new FailedException($"Cannot get replication controller: {result.ErrorMessage}");
             }
         }

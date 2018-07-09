@@ -242,56 +242,59 @@ namespace Tmds.DotnetOC
             var podStates = new Dictionary<string, string>();
             while (true)
             {
-                // TODO: rc may not exist yet?
-                ReplicationController controller = _openshift.GetReplicationController(name, version: "1");
-                bool isDone = controller.Phase == "Complete" || controller.Phase == "Failed";
-                if (controller.Phase != controllerPhase && !isDone)
+                ReplicationController controller = _openshift.GetReplicationController(name, version: "1", mustExist: false);
+                if (controller != null)
                 {
-                    PrintLine($"Deployment is {controller.Phase}");
-                }
-                controllerPhase = controller.Phase;
-                DeploymentPod[] pods = _openshift.GetDeploymentPods(name, version: "1");
-                foreach (var pod in pods)
-                {
-                    // format podState
-                    string podState = pod.Phase;
-                    if (!string.IsNullOrEmpty(pod.Reason) || pod.RestartCount > 0)
+                    bool isDone = controller.Phase == "Complete" || controller.Phase == "Failed";
+                    if (controller.Phase != controllerPhase && !isDone)
                     {
-                        podState += "(";
-                        podState += $"{pod.Reason}";
-                        if (pod.RestartCount > 0)
+                        PrintLine($"Deployment is {controller.Phase}");
+                    }
+                    controllerPhase = controller.Phase;
+                    DeploymentPod[] pods = _openshift.GetDeploymentPods(name, version: "1");
+                    foreach (var pod in pods)
+                    {
+                        // format podState
+                        string podState = pod.Phase;
+                        if (!string.IsNullOrEmpty(pod.Reason) || pod.RestartCount > 0)
                         {
-                            if (!string.IsNullOrEmpty(pod.Reason)){
-                                podState += ", ";
+                            podState += "(";
+                            podState += $"{pod.Reason}";
+                            if (pod.RestartCount > 0)
+                            {
+                                if (!string.IsNullOrEmpty(pod.Reason)){
+                                    podState += ", ";
+                                }
+                                podState += $"{pod.RestartCount} restarts";
                             }
-                            podState += $"{pod.RestartCount} restarts";
+                            podState += ")";
                         }
-                        podState += ")";
-                    }
-                    if (!string.IsNullOrEmpty(pod.Message))
-                    {
-                        podState += $": {pod.Message}";
-                    }
-
-                    // Check if podState changed
-                    if (!podStates.TryGetValue(pod.Name, out string previousState) || previousState != podState)
-                    {
-                        PrintLine($"Pod {pod.Name} is {podState}");
-                        podStates[pod.Name] = podState;
-
-                        // Print pod log when in CrashLoopBackOff
-                        if (pod.Reason == "CrashLoopBackOff")
+                        if (!string.IsNullOrEmpty(pod.Message))
                         {
-                            PrintLine($"{pod.Name} log:");
-                            _openshift.GetLog(pod.Name, ReadToConsole);
+                            podState += $": {pod.Message}";
+                        }
+
+                        // Check if podState changed
+                        if (!podStates.TryGetValue(pod.Name, out string previousState) || previousState != podState)
+                        {
+                            PrintLine($"Pod {pod.Name} is {podState}");
+                            podStates[pod.Name] = podState;
+
+                            // Print pod log when in CrashLoopBackOff
+                            if (pod.Reason == "CrashLoopBackOff")
+                            {
+                                PrintLine($"{pod.Name} log:");
+                                _openshift.GetLog(pod.Name, ReadToConsole);
+                            }
                         }
                     }
-                }
 
-                if (isDone)
-                {
-                    break;
+                    if (isDone)
+                    {
+                        break;
+                    }
                 }
+                System.Threading.Thread.Sleep(1000);
             }
             if (controllerPhase == "Failed")
             {
