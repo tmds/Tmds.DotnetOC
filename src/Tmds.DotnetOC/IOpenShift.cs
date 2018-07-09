@@ -23,6 +23,22 @@ namespace Tmds.DotnetOC
         public string Phase { get; set; }
     }
 
+    class DeploymentPod
+    {
+        public string Phase { get; set; }
+        public string Name { get; set; }
+        public string DeploymentConfigLatestVersion { get; set; }
+        public string Reason { get; set; }
+        public string Message { get; set; }
+        public int RestartCount { get; set; }
+    }
+
+    class ReplicationController
+    {
+        public string Phase { get; set; }
+        public string Version { get; set; }
+    }
+
     interface IOpenShift
     {
         bool IsCommunity();
@@ -41,8 +57,12 @@ namespace Tmds.DotnetOC
 
         Build GetLatestBuild(string buildConfigName);
 
-        void GetLog(string podName, Action<StreamReader> reader);
+        void GetLog(string podName, Action<StreamReader> reader, bool follow = false);
 
         Pod GetPod(string podName, bool mustExist = true);
+
+        ReplicationController GetReplicationController(string deploymentConfigName, string version);
+
+        DeploymentPod[] GetDeploymentPods(string deploymentConfigName, string version);
     }
 }

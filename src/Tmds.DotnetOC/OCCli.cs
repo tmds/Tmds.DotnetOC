@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -117,9 +118,9 @@ namespace Tmds.DotnetOC
             }
         }
 
-        public void GetLog(string podName, Action<StreamReader> reader)
+        public void GetLog(string podName, Action<StreamReader> reader, bool follow)
         {
-            Result result = ProcessUtils.Run("oc", $"logs -f {podName}", reader);
+            Result result = ProcessUtils.Run("oc", $"logs {(follow ? "-f" : string.Empty)} {podName}", reader);
             if (!result.IsSuccess)
             {
                 throw new FailedException($"Cannot get pod log: {result.ErrorMessage}");
@@ -140,6 +141,49 @@ namespace Tmds.DotnetOC
                     return null;
                 }
                 throw new FailedException($"Cannot get build information: {result.ErrorMessage}");
+            }
+        }
+
+        public DeploymentPod[] GetDeploymentPods(string deploymentConfigName, string version)
+        {
+            Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get pods -l deploymentconfig={deploymentConfigName} -o json");
+            if (result.IsSuccess)
+            {
+                var pods = new List<DeploymentPod>();
+                foreach (var item in result.Value["items"])
+                {
+                    var pod = PodParser.ParseDeploymentPod(item as JObject);
+                    if (pod.DeploymentConfigLatestVersion == version)
+                    {
+                        pods.Add(pod);
+                    }
+                }
+                return pods.ToArray();
+            }
+            else
+            {
+                throw new FailedException($"Cannot get build information: {result.ErrorMessage}");
+            }
+        }
+
+        public ReplicationController GetReplicationController(string deploymentConfigName, string version)
+        {
+            Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get rc -l openshift.io/deployment-config.name={deploymentConfigName} -o json");
+            if (result.IsSuccess)
+            {
+                foreach (var item in result.Value["items"])
+                {
+                    ReplicationController rc =  ReplicationControllerParser.Parse(item as JObject);
+                    if (rc.Version == version)
+                    {
+                        return rc;
+                    }
+                }
+                throw new FailedException("Replication controller not found");
+            }
+            else
+            {
+                throw new FailedException($"Cannot get replication controller: {result.ErrorMessage}");
             }
         }
     }
