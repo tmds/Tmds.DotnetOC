@@ -7,7 +7,7 @@ namespace Tmds.DotnetOC
 {
     static class BuildParser
     {
-        public static Build GetLatestBuild(JObject builds, string buildConfigName)
+        public static Build GetBuild(JObject builds, string buildConfigName, int? desiredBuild)
         {
             JObject jobject = builds;
             Build build = null;
@@ -30,8 +30,13 @@ namespace Tmds.DotnetOC
                     PodName = podName,
                     StatusMessage = statusMessage,
                     Phase = phase,
-                    Reason = reason
+                    Reason = reason,
+                    BuildNumber = buildNumber
                 };
+                if (buildNumber == desiredBuild)
+                {
+                    return build;
+                }
             }
             return build;
         }

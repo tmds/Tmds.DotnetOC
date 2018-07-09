@@ -16,6 +16,7 @@ namespace Tmds.DotnetOC
         public string StatusMessage { get; set; }
         public string Phase { get; set; }
         public string Reason { get; set; }
+        public int BuildNumber { get; set; }
     }
 
     class Pod
@@ -55,7 +56,7 @@ namespace Tmds.DotnetOC
 
         string GetCurrentNamespace();
 
-        Build GetLatestBuild(string buildConfigName, bool mustExist = true);
+        Build GetBuild(string buildConfigName, int? buildNumber = null, bool mustExist = true);
 
         void GetLog(string podName, Action<StreamReader> reader, bool follow = false);
 

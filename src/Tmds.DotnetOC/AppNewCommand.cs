@@ -200,7 +200,7 @@ namespace Tmds.DotnetOC
             Build build = null;
             while (true)
             {
-                build = _openshift.GetLatestBuild(buildConfigName, mustExist: false);
+                build = _openshift.GetBuild(buildConfigName, buildNumber: null, mustExist: false);
                 if (build != null && build.Phase != "Pending")
                 {
                     break;
@@ -230,7 +230,7 @@ namespace Tmds.DotnetOC
             }
 
             // Check build status
-            build = _openshift.GetLatestBuild(buildConfigName); // TODO: build number!!
+            build = _openshift.GetBuild(buildConfigName, buildNumber: build.BuildNumber);
             if (build.Phase != "Complete")
             {
                 Fail($"The build failed: {build.Phase}({build.Reason}): {build.StatusMessage}");
