@@ -50,7 +50,7 @@ namespace Tmds.DotnetOC
             VersionStringSorter.Sort(s2iVersions);
             PrintLine(string.Join(", ", s2iVersions));
 
-            _console.EmptyLine();
+            PrintEmptyLine();
 
             // Compare installed and latest versions
             if (!Force)

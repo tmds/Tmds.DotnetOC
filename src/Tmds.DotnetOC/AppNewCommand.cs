@@ -160,6 +160,7 @@ namespace Tmds.DotnetOC
             // Determine memory
             int memory = Memory;
 
+            PrintLine("Creating application:");
             PrintLine($" - name            : {name}");
             PrintLine($" - git-url         : {gitUrl}");
             PrintLine($" - git-ref         : {gitRef}");
@@ -171,9 +172,13 @@ namespace Tmds.DotnetOC
             PrintEmptyLine();
 
             // Prompt
-            if (!AssumeYes && !PromptYesNo("Is this ok", defaultAnswer: false))
+            if (!AssumeYes)
             {
-                return;
+                PrintLine("These parameters can be overwritten by passing arguments on the command-line.");
+                if (!PromptYesNo("Is this ok", defaultAnswer: false))
+                {
+                    return;
+                }
             }
 
             _openshift.EnsureConnection();
