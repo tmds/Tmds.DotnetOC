@@ -40,6 +40,13 @@ namespace Tmds.DotnetOC
             _console.WriteLine(msg);
         }
 
+        protected void PrintEmptyLine() => PrintLine(string.Empty);
+
+        protected bool PromptYesNo(string prompt, bool defaultAnswer)
+        {
+            return _console.GetYesNo(prompt, defaultAnswer);
+        }
+
         public CommandBase(IConsole console)
         {
             _console = console;

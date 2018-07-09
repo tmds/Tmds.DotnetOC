@@ -1,4 +1,5 @@
 using System;
+using McMaster.Extensions.CommandLineUtils;
 
 namespace Tmds.DotnetOC
 {
@@ -13,6 +14,11 @@ namespace Tmds.DotnetOC
         public void WriteLine(string msg)
         {
             Console.WriteLine(msg);
+        }
+
+        public bool GetYesNo(string prompt, bool defaultAnswer)
+        {
+            return Prompt.GetYesNo(prompt, defaultAnswer);
         }
     }
 }

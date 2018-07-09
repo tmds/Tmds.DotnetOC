@@ -23,12 +23,24 @@ namespace Tmds.DotnetOC
             string phase = (string)jobject["status"]["phase"];
             string name = (string)jobject["metadata"]["name"];
             string version = (string)jobject["metadata"]["annotations"]["openshift.io/deployment-config.latest-version"];
-            JToken containerStatus = jobject["status"]["containerStatuses"].First(); // TODO: handle more than 1 container
+            JToken containerStatus = (jobject["status"]["containerStatuses"] as JArray).First;
             JToken containerState = containerStatus["state"];
             JToken childState = containerState["running"] ?? containerState["waiting"] ?? containerState["terminated"];
             string reason = (string)childState["reason"];
             string message = (string)childState["message"];
             int restartCount = (int)containerStatus["restartCount"];
+
+            // When Failed/PodInitializing, try to find more info in initContainerStatuses
+            if (phase == "Failed" && reason == "PodInitializing")
+            {
+                containerStatus = (jobject["status"]["initContainerStatuses"] as JArray).First;
+                containerState = containerStatus["state"];
+                childState = containerState["running"] ?? containerState["waiting"] ?? containerState["terminated"];
+                reason = (string)childState["reason"];
+                message = (string)childState["message"];
+                restartCount = (int)containerStatus["restartCount"];
+            }
+
             return new DeploymentPod
             {
                 Phase = phase,

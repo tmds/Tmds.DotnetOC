@@ -5,6 +5,8 @@ namespace Tmds.DotnetOC
         void Write(string msg);
 
         void WriteLine(string msg);
+
+        bool GetYesNo(string prompt, bool defaultAnswer);
     }
 
     static class ConsoleExtensions

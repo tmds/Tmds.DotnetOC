@@ -114,21 +114,22 @@ namespace Tmds.DotnetOC
             }
         }
 
-        public void GetLog(string podName, Action<StreamReader> reader, bool follow)
+        public Result GetLog(string podName, Action<StreamReader> reader, bool follow, bool ignoreError)
         {
             Result result = ProcessUtils.Run("oc", $"logs {(follow ? "-f" : string.Empty)} {podName}", reader);
-            if (!result.IsSuccess)
+            if (!ignoreError && !result.IsSuccess)
             {
                 throw new FailedException($"Cannot get pod log: {result.ErrorMessage}");
             }
+            return result;
         }
 
-        public Pod GetPod(string podName, bool mustExist)
+        public DeploymentPod GetPod(string podName, bool mustExist)
         {
             Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get pod {podName} -o json");
             if (result.IsSuccess)
             {
-                return PodParser.Parse(result.Value);
+                return PodParser.ParseDeploymentPod(result.Value);
             }
             else
             {

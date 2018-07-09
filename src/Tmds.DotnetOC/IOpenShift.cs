@@ -58,9 +58,9 @@ namespace Tmds.DotnetOC
 
         Build GetBuild(string buildConfigName, int? buildNumber = null, bool mustExist = true);
 
-        void GetLog(string podName, Action<StreamReader> reader, bool follow = false);
+        Result GetLog(string podName, Action<StreamReader> reader, bool follow = false, bool ignoreError = false);
 
-        Pod GetPod(string podName, bool mustExist = true);
+        DeploymentPod GetPod(string podName, bool mustExist = true);
 
         ReplicationController GetReplicationController(string deploymentConfigName, string version, bool mustExist = true);
 

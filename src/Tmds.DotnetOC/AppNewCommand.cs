@@ -39,6 +39,9 @@ namespace Tmds.DotnetOC
         [Option("--runtime-version", CommandOptionType.SingleValue)]
         public string RuntimeVersion { get; }
 
+        [Option("-y", "Assume yes", CommandOptionType.NoValue)]
+        public bool AssumeYes { get; }
+
         protected override async Task ExecuteAsync(CommandLineApplication app)
         {
             // Find the startup project file
@@ -165,7 +168,13 @@ namespace Tmds.DotnetOC
             PrintLine($" - sdk-version     : {sdkVersion}");
             PrintLine($" - memory (MB)     : {memory}");
 
-            // TODO: prompt
+            PrintEmptyLine();
+
+            // Prompt
+            if (!AssumeYes && !PromptYesNo("Is this ok", defaultAnswer: false))
+            {
+                return;
+            }
 
             _openshift.EnsureConnection();
 
@@ -213,7 +222,7 @@ namespace Tmds.DotnetOC
             bool podFound = false;
             while (true)
             {
-                Pod pod = _openshift.GetPod(build.PodName, mustExist: false);
+                DeploymentPod pod = _openshift.GetPod(build.PodName, mustExist: false);
                 if (pod == null || pod.Phase != "Pending")
                 {
                     podFound = pod != null;
@@ -226,7 +235,14 @@ namespace Tmds.DotnetOC
             if (podFound)
             {
                 PrintLine("Build log:");
-                _openshift.GetLog(build.PodName, ReadToConsole, follow: true);
+                Result result = _openshift.GetLog(build.PodName, ReadToConsole, follow: true, ignoreError: true);
+                // There is no build log, fall back to printing the build pod status.
+                if (!result.IsSuccess)
+                {
+                    PrintLine($"Cannot retrieve log: {result.ErrorMessage}");
+                    DeploymentPod pod = _openshift.GetPod(build.PodName, mustExist: false);
+                    PrintLine($"Build pod status is {pod.Phase}({pod.Reason}): {pod.Message}");
+                }
             }
 
             // Check build status
