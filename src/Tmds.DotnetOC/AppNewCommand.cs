@@ -165,6 +165,8 @@ namespace Tmds.DotnetOC
             PrintLine($" - sdk-version     : {sdkVersion}");
             PrintLine($" - memory (MB)     : {memory}");
 
+            // TODO: prompt
+
             _openshift.EnsureConnection();
 
             // Check if runtime version is installed
@@ -179,33 +181,34 @@ namespace Tmds.DotnetOC
                 {
                     Fail($"Runtime version {runtimeVersion} is not installed. You can run the 'install' command to install to the latest versions.");
                 }
+                // TODO: install streams when available (+ opt-out)
             }
 
             string imageStreamName = name;
             // Deployment config
             JObject deploymentConfig = CreateDeploymentConfig(name, imageStreamName, memory);
-            System.Console.WriteLine(deploymentConfig.ToString());
             _openshift.Create(deploymentConfig);
 
             // Build config
             string buildConfigName = name;
             JObject buildConfig = CreateBuildConfig(buildConfigName, imageStreamName, imageNamespace, $"dotnet:{runtimeVersion}", gitUrl, gitRef, startupProject, sdkVersion);
-
             _openshift.CreateImageStream(imageStreamName);
-
             _openshift.Create(buildConfig);
 
+            // Wait for build
             PrintLine($"Creating build pod.");
             Build build = null;
             while (true)
             {
-                build = _openshift.GetLatestBuild(buildConfigName);
+                build = _openshift.GetLatestBuild(buildConfigName); // TODO: may not exist?
                 if (build.Phase != "Pending")
                 {
                     break;
                 }
                 System.Threading.Thread.Sleep(1000);
             }
+
+            // Wait for build pod
             PrintLine($"Starting build on {build.PodName}.");
             bool podFound = false;
             while (true)
@@ -218,11 +221,15 @@ namespace Tmds.DotnetOC
                 }
                 System.Threading.Thread.Sleep(1000);
             }
+
+            // Print build log (follow till finished)
             if (podFound)
             {
                 PrintLine("Build log:");
                 _openshift.GetLog(build.PodName, ReadToConsole, follow: true);
             }
+
+            // Check build status
             build = _openshift.GetLatestBuild(buildConfigName); // TODO: build number!!
             if (build.Phase != "Complete")
             {
@@ -230,6 +237,7 @@ namespace Tmds.DotnetOC
             }
             PrintLine("Build finished succesfully.");
 
+            // Follow up on deployment
             string controllerPhase = null;
             var podStates = new Dictionary<string, string>();
             while (true)
@@ -245,6 +253,7 @@ namespace Tmds.DotnetOC
                 DeploymentPod[] pods = _openshift.GetDeploymentPods(name, version: "1");
                 foreach (var pod in pods)
                 {
+                    // format podState
                     string podState = pod.Phase;
                     if (!string.IsNullOrEmpty(pod.Reason) || pod.RestartCount > 0)
                     {
@@ -263,10 +272,14 @@ namespace Tmds.DotnetOC
                     {
                         podState += $": {pod.Message}";
                     }
+
+                    // Check if podState changed
                     if (!podStates.TryGetValue(pod.Name, out string previousState) || previousState != podState)
                     {
                         PrintLine($"Pod {pod.Name} is {podState}");
                         podStates[pod.Name] = podState;
+
+                        // Print pod log when in CrashLoopBackOff
                         if (pod.Reason == "CrashLoopBackOff")
                         {
                             PrintLine($"{pod.Name} log:");

@@ -10,15 +10,12 @@ namespace Tmds.DotnetOC
     {
         public void EnsureConnection()
         {
-            Result result = Run("whoami");
+            Result result = ProcessUtils.Run("oc", "whoami");
             if (!result.IsSuccess)
             {
                 throw new FailedException($"Cannot connect to OpenShift cluster: {result.ErrorMessage}");
             }
         }
-
-        private Result Run(string arguments, JObject input = null)
-            => ProcessUtils.Run("oc", arguments, input);
 
         public bool IsCommunity()
         {
@@ -71,7 +68,7 @@ namespace Tmds.DotnetOC
 
         private void RunCommand(string command, string ocNamespace, JObject value)
         {
-            Result result = Run(command + " " + NamespaceArg(ocNamespace) + " -f -", value);
+            Result result = ProcessUtils.Run("oc", command + " " + NamespaceArg(ocNamespace) + " -f -", value);
             if (!result.IsSuccess)
             {
                 throw new FailedException($"Unable to '{command}': {result.ErrorMessage}");
@@ -80,7 +77,7 @@ namespace Tmds.DotnetOC
 
         public void CreateImageStream(string name)
         {
-            Result result = Run($"create is {name}");
+            Result result = ProcessUtils.Run("oc", $"create is {name}");
             if (!result.IsSuccess)
             {
                 // TODO: ???

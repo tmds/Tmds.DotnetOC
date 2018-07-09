@@ -18,6 +18,9 @@ namespace Tmds.DotnetOC
         private static Func<StreamReader, JObject> s_JObjectReader = _ => JObject.Load(new JsonTextReader(new StreamReader(_.BaseStream)));
         private static Func<StreamReader, string> s_StringReader = _ => _.ReadToEnd();
 
+        public static Result Run(string filename, string arguments, ProcessStartInfo psi = null)
+            => Run<VoidType, VoidType>(filename, arguments, VoidType.Instance, psi);
+
         public static Result<TOut> Run<TOut>(string filename, string arguments, ProcessStartInfo psi = null)
             => Run<VoidType, TOut>(filename, arguments, VoidType.Instance, psi);
 
@@ -51,7 +54,7 @@ namespace Tmds.DotnetOC
                 writeInput = streamWriter => {
                     using (var writer = new JsonTextWriter(streamWriter))
                     {
-                        ((JObject)(object)input)?.WriteTo(writer); // TODO: get rid of Elvis
+                        ((JObject)(object)input).WriteTo(writer);
                     }
                 };
             }
