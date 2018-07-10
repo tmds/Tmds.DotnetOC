@@ -215,6 +215,10 @@ namespace Tmds.DotnetOC
             while (true)
             {
                 build = _openshift.GetBuild(buildConfigName, buildNumber: null, mustExist: false);
+                if (build.Phase == "New" && string.IsNullOrEmpty(build.Reason))
+                {
+                    build = null;
+                }
                 if (build != null)
                 {
                     break;
@@ -222,7 +226,10 @@ namespace Tmds.DotnetOC
                 System.Threading.Thread.Sleep(1000);
             }
 
-            // TODO: handle state New / CannotCreateBuildPod
+            if (build.Phase == "New")
+            {
+                Fail($"Cannot create build: {build.Reason}: {build.StatusMessage}");
+            }
 
             // Wait for build
             PrintLine($"Waiting for build pod {build.PodName}.");
@@ -267,17 +274,58 @@ namespace Tmds.DotnetOC
                     foreach (var pod in pods)
                     {
                         ContainerStatus container = pod.Containers[0]; // pods have 1 container for the dotnet application
-                        // TODO: improve containerState formatting
-                        string containerState = $"{container.State}({container.Reason}, {container.RestartCount}): {container.Message}";
+                        string containerState = null;
+                        // user-friendly states:
+                        if (container.State == "running")
+                        {
+                            if (container.Ready)
+                            {
+                                containerState = "is ready";
+                            }
+                            else
+                            {
+                                containerState = "has started.";
+                            }
+                        }
+                        else if (container.State == "waiting")
+                        {
+                            if (container.Reason == "ContainerCreating")
+                            {
+                                containerState = "is being created.";
+                            }
+                            else if (container.Reason == "CrashLoopBackOff")
+                            {
+                                containerState = $"is crashing: ${container.Message}";
+                            }
+                        }
+                        else
+                        {
+                            if (string.IsNullOrEmpty(container.Message))
+                            {
+                                if (container.Reason == "Error" ||
+                                    container.Reason == "Completed ||
+                                    string.IsNullOrEmpty(container.Reason))
+                                {
+                                    containerState = "has terminated.";
+                                }
+                            }
+                        }
+                        // fallback:
+                        if (containerState == null)
+                        {
+                            containerState = $"is {container.State}(reason={container.Reason}): {container.Message}";
+                        }
 
                         // Check if podState changed
                         if (!podStates.TryGetValue(pod.Name, out string previousState) || previousState != containerState)
                         {
-                            PrintLine($"Pod {pod.Name} container is {containerState}");
+                            PrintLine($"Pod {pod.Name} container {containerState}");
                             podStates[pod.Name] = containerState;
 
                             // Print pod log when it terminated
-                            if (container.State == "terminated")
+                            // or when we see CrashLoopBackOff and missed the terminated state.
+                            if (container.State == "terminated" ||
+                                (container.Reason == "CrashLoopBackOff" && !previousState.Contains("terminated"))) // TODO: improve terminated check
                             {
                                 PrintLine($"{pod.Name} log:");
                                 _openshift.GetLog(pod.Name, container.Name, ReadToConsole);

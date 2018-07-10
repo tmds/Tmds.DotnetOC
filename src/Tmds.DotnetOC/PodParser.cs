@@ -46,6 +46,7 @@ namespace Tmds.DotnetOC
                 string reason = (string)childState["reason"];
                 string message = (string)childState["message"];
                 int restartCount = (int)containerStatus["restartCount"];
+                bool ready = (bool)containerStatus["ready"];
                 containerStatuses.Add(
                     new ContainerStatus
                     {
@@ -53,7 +54,8 @@ namespace Tmds.DotnetOC
                         Message = message,
                         RestartCount = restartCount,
                         State = state,
-                        Name = name
+                        Name = name,
+                        Ready = ready
                     }
                 );
             }

@@ -26,6 +26,7 @@ namespace Tmds.DotnetOC
         public string Reason { get; set; }
         public string Message { get; set; }
         public int RestartCount { get; set; }
+        public bool Ready { get; set; }
     }
 
     class Pod
