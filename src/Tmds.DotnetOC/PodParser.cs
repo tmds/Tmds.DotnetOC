@@ -7,49 +7,57 @@ namespace Tmds.DotnetOC
 {
     static class PodParser
     {
-        public static Pod Parse(JObject pod)
+        public static Pod ParsePod(JObject pod)
         {
-            JObject jobject = pod;
-            string phase = (string)jobject["status"]["phase"];
-            return new Pod
+            if (pod == null)
             {
-                Phase = phase
-            };
-        }
-
-        public static DeploymentPod ParseDeploymentPod(JObject pod)
-        {
+                throw new ArgumentNullException(nameof(pod));
+            }
             JObject jobject = pod;
             string phase = (string)jobject["status"]["phase"];
             string name = (string)jobject["metadata"]["name"];
             string version = (string)jobject["metadata"]["annotations"]["openshift.io/deployment-config.latest-version"];
-            JToken containerStatus = (jobject["status"]["containerStatuses"] as JArray).First;
-            JToken containerState = containerStatus["state"];
-            JToken childState = containerState["running"] ?? containerState["waiting"] ?? containerState["terminated"];
-            string reason = (string)childState["reason"];
-            string message = (string)childState["message"];
-            int restartCount = (int)containerStatus["restartCount"];
-
-            // When Failed/PodInitializing, try to find more info in initContainerStatuses
-            if (phase == "Failed" && reason == "PodInitializing")
-            {
-                containerStatus = (jobject["status"]["initContainerStatuses"] as JArray).First;
-                containerState = containerStatus["state"];
-                childState = containerState["running"] ?? containerState["waiting"] ?? containerState["terminated"];
-                reason = (string)childState["reason"];
-                message = (string)childState["message"];
-                restartCount = (int)containerStatus["restartCount"];
-            }
-
-            return new DeploymentPod
+            ContainerStatus[] containerStatuses = ParseContainerStatuses(jobject["status"]["containerStatuses"] as JArray);
+            ContainerStatus[] initContainerStatuses = ParseContainerStatuses(jobject["status"]["initContainerStatuses"] as JArray);
+            return new Pod
             {
                 Phase = phase,
                 Name = name,
                 DeploymentConfigLatestVersion = version,
-                Reason = reason,
-                Message = message,
-                RestartCount = restartCount
+                Containers = containerStatuses,
+                InitContainers = initContainerStatuses
             };
+        }
+
+        private static ContainerStatus[] ParseContainerStatuses(JArray statuses)
+        {
+            if (statuses == null)
+            {
+                return Array.Empty<ContainerStatus>();
+            }
+            var containerStatuses = new List<ContainerStatus>();
+            foreach (JToken containerStatus in statuses)
+            {
+                string name = (string)containerStatus["name"];
+                JObject containerState = containerStatus["state"] as JObject;
+                JProperty prop = containerState.Properties().First();
+                string state = prop.Name;
+                JToken childState = prop.Value;
+                string reason = (string)childState["reason"];
+                string message = (string)childState["message"];
+                int restartCount = (int)containerStatus["restartCount"];
+                containerStatuses.Add(
+                    new ContainerStatus
+                    {
+                        Reason = reason,
+                        Message = message,
+                        RestartCount = restartCount,
+                        State = state,
+                        Name = name
+                    }
+                );
+            }
+            return containerStatuses.ToArray();
         }
     }
 }

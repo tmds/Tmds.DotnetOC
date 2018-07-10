@@ -114,9 +114,9 @@ namespace Tmds.DotnetOC
             }
         }
 
-        public Result GetLog(string podName, Action<StreamReader> reader, bool follow, bool ignoreError)
+        public Result GetLog(string podName, string container, Action<StreamReader> reader, bool follow, bool ignoreError)
         {
-            Result result = ProcessUtils.Run("oc", $"logs {(follow ? "-f" : string.Empty)} {podName}", reader);
+            Result result = ProcessUtils.Run("oc", $"logs {(follow ? "-f" : string.Empty)} {podName} {(string.IsNullOrEmpty(container) ? "" : "-c " + container)}", reader);
             if (!ignoreError && !result.IsSuccess)
             {
                 throw new FailedException($"Cannot get pod log: {result.ErrorMessage}");
@@ -124,12 +124,12 @@ namespace Tmds.DotnetOC
             return result;
         }
 
-        public DeploymentPod GetPod(string podName, bool mustExist)
+        public Pod GetPod(string podName, bool mustExist)
         {
             Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get pod {podName} -o json");
             if (result.IsSuccess)
             {
-                return PodParser.ParseDeploymentPod(result.Value);
+                return PodParser.ParsePod(result.Value);
             }
             else
             {
@@ -141,15 +141,15 @@ namespace Tmds.DotnetOC
             }
         }
 
-        public DeploymentPod[] GetDeploymentPods(string deploymentConfigName, string version)
+        public Pod[] GetPods(string deploymentConfigName, string version)
         {
             Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get pods -l deploymentconfig={deploymentConfigName} -o json");
             if (result.IsSuccess)
             {
-                var pods = new List<DeploymentPod>();
+                var pods = new List<Pod>();
                 foreach (var item in result.Value["items"])
                 {
-                    var pod = PodParser.ParseDeploymentPod(item as JObject);
+                    var pod = PodParser.ParsePod(item as JObject);
                     if (pod.DeploymentConfigLatestVersion == version)
                     {
                         pods.Add(pod);

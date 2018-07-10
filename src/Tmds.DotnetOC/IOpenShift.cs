@@ -19,19 +19,24 @@ namespace Tmds.DotnetOC
         public int BuildNumber { get; set; }
     }
 
-    class Pod
+    class ContainerStatus
     {
-        public string Phase { get; set; }
+        public string Name { get; set; }
+        public string State { get; set; }
+        public string Reason { get; set; }
+        public string Message { get; set; }
+        public int RestartCount { get; set; }
     }
 
-    class DeploymentPod
+    class Pod
     {
         public string Phase { get; set; }
         public string Name { get; set; }
         public string DeploymentConfigLatestVersion { get; set; }
-        public string Reason { get; set; }
-        public string Message { get; set; }
-        public int RestartCount { get; set; }
+
+        public ContainerStatus[] Containers { get; set; }
+
+        public ContainerStatus[] InitContainers { get; set; }
     }
 
     class ReplicationController
@@ -58,12 +63,12 @@ namespace Tmds.DotnetOC
 
         Build GetBuild(string buildConfigName, int? buildNumber = null, bool mustExist = true);
 
-        Result GetLog(string podName, Action<StreamReader> reader, bool follow = false, bool ignoreError = false);
+        Result GetLog(string podName, string container, Action<StreamReader> reader, bool follow = false, bool ignoreError = false);
 
-        DeploymentPod GetPod(string podName, bool mustExist = true);
+        Pod GetPod(string podName, bool mustExist = true);
 
         ReplicationController GetReplicationController(string deploymentConfigName, string version, bool mustExist = true);
 
-        DeploymentPod[] GetDeploymentPods(string deploymentConfigName, string version);
+        Pod[] GetPods(string deploymentConfigName, string version);
     }
 }

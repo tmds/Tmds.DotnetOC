@@ -215,40 +215,30 @@ namespace Tmds.DotnetOC
             while (true)
             {
                 build = _openshift.GetBuild(buildConfigName, buildNumber: null, mustExist: false);
-                if (build != null && build.Phase != "Pending")
+                if (build != null)
                 {
                     break;
                 }
                 System.Threading.Thread.Sleep(1000);
             }
 
-            // Wait for build pod
-            PrintLine($"Build started on {build.PodName}.");
-            bool podFound = false;
+            // TODO: handle state New / CannotCreateBuildPod
+
+            // Wait for build
+            PrintLine($"Waiting for build pod {build.PodName}.");
             while (true)
             {
-                DeploymentPod pod = _openshift.GetPod(build.PodName, mustExist: false);
-                if (pod == null || pod.Phase != "Pending")
+                Pod pod = _openshift.GetPod(build.PodName, mustExist: false);
+                if (pod != null)
                 {
-                    podFound = pod != null;
                     break;
                 }
                 System.Threading.Thread.Sleep(1000);
             }
 
-            // Print build log (follow till finished)
-            if (podFound)
-            {
-                PrintLine("Build log:");
-                Result result = _openshift.GetLog(build.PodName, ReadToConsole, follow: true, ignoreError: true);
-                // There is no build log, fall back to printing the build pod status.
-                if (!result.IsSuccess)
-                {
-                    PrintLine($"Cannot retrieve log: {result.ErrorMessage}");
-                    DeploymentPod pod = _openshift.GetPod(build.PodName, mustExist: false);
-                    PrintLine($"Build pod status is {pod.Phase}({pod.Reason}): {pod.Message}");
-                }
-            }
+            // Print build log
+            PrintLine("Build log:");
+            PrintPodLog(build.PodName);
 
             // Check build status
             build = _openshift.GetBuild(buildConfigName, buildNumber: build.BuildNumber);
@@ -263,6 +253,7 @@ namespace Tmds.DotnetOC
             var podStates = new Dictionary<string, string>();
             while (true)
             {
+                System.Threading.Thread.Sleep(1000); // TODO: this next call sometimes blocks ?!? :/
                 ReplicationController controller = _openshift.GetReplicationController(name, version: "1", mustExist: false);
                 if (controller != null)
                 {
@@ -272,40 +263,24 @@ namespace Tmds.DotnetOC
                         PrintLine($"Deployment is {controller.Phase}");
                     }
                     controllerPhase = controller.Phase;
-                    DeploymentPod[] pods = _openshift.GetDeploymentPods(name, version: "1");
+                    Pod[] pods = _openshift.GetPods(name, version: "1");
                     foreach (var pod in pods)
                     {
-                        // format podState
-                        string podState = pod.Phase;
-                        if (!string.IsNullOrEmpty(pod.Reason) || pod.RestartCount > 0)
-                        {
-                            podState += "(";
-                            podState += $"{pod.Reason}";
-                            if (pod.RestartCount > 0)
-                            {
-                                if (!string.IsNullOrEmpty(pod.Reason)){
-                                    podState += ", ";
-                                }
-                                podState += $"{pod.RestartCount} restarts";
-                            }
-                            podState += ")";
-                        }
-                        if (!string.IsNullOrEmpty(pod.Message))
-                        {
-                            podState += $": {pod.Message}";
-                        }
+                        ContainerStatus container = pod.Containers[0]; // pods have 1 container for the dotnet application
+                        // TODO: improve containerState formatting
+                        string containerState = $"{container.State}({container.Reason}, {container.RestartCount}): {container.Message}";
 
                         // Check if podState changed
-                        if (!podStates.TryGetValue(pod.Name, out string previousState) || previousState != podState)
+                        if (!podStates.TryGetValue(pod.Name, out string previousState) || previousState != containerState)
                         {
-                            PrintLine($"Pod {pod.Name} is {podState}");
-                            podStates[pod.Name] = podState;
+                            PrintLine($"Pod {pod.Name} container is {containerState}");
+                            podStates[pod.Name] = containerState;
 
-                            // Print pod log when in CrashLoopBackOff
-                            if (pod.Reason == "CrashLoopBackOff")
+                            // Print pod log when it terminated
+                            if (container.State == "terminated")
                             {
                                 PrintLine($"{pod.Name} log:");
-                                _openshift.GetLog(pod.Name, ReadToConsole);
+                                _openshift.GetLog(pod.Name, container.Name, ReadToConsole);
                             }
                         }
                     }
@@ -317,6 +292,7 @@ namespace Tmds.DotnetOC
                 }
                 System.Threading.Thread.Sleep(1000);
             }
+
             if (controllerPhase == "Failed")
             {
                 Fail("Deployment failed.");
@@ -326,13 +302,97 @@ namespace Tmds.DotnetOC
                 PrintLine("Deployment finished succesfull.");
             }
 
-            PrintLine("Creating service.");
             // Service
+            PrintLine("Creating service.");
             JObject service = CreateService(name);
             _openshift.Create(service);
 
-
             PrintLine("Application created succesfully.");
+        }
+
+        private void PrintPodLog(string podName)
+        {
+            string previousContainer = null;
+            while (true)
+            {
+                Pod pod = _openshift.GetPod(podName, mustExist: false);
+                bool useNext = previousContainer == null;
+                ContainerStatus nextContainer = null;
+                foreach (var cont in pod.InitContainers)
+                {
+                    if (useNext)
+                    {
+                        nextContainer = cont;
+                        break;
+                    }
+                    useNext = cont.Name == previousContainer;
+                }
+                if (nextContainer == null)
+                {
+                    foreach (var cont in pod.Containers)
+                    {
+                        if (useNext)
+                        {
+                            nextContainer = cont;
+                            break;
+                        }
+                        useNext = cont.Name == previousContainer;
+                    }
+                }
+                if (nextContainer == null)
+                {
+                    break;
+                }
+                if (nextContainer.State == "running" || nextContainer.State == "terminated")
+                {
+                    Result result = _openshift.GetLog(podName, nextContainer.Name, ReadToConsole, follow: true, ignoreError: true);
+                    if (!result.IsSuccess)
+                    {
+                        PrintLine($"Container {nextContainer.Name} is {nextContainer.Reason}: {nextContainer.Message}");
+                    }
+                    previousContainer = nextContainer.Name;
+                }
+                else // nextContainer.State == "waiting"
+                {
+                    if (pod.Phase != "Pending" && pod.Phase != "Running")
+                    {
+                        break;
+                    }
+                    System.Threading.Thread.Sleep(1000);
+                }
+            }
+        }
+
+        // TODO: remove
+        private string FollowPodState(string podName)
+        {
+                        string previousDescription = null;
+            while (true)
+            {
+                Pod pod = _openshift.GetPod(podName, mustExist: false);
+                string newDescr = Describe(pod);
+                if (previousDescription != newDescr)
+                {
+                    System.Console.WriteLine(newDescr);
+                    previousDescription = newDescr;
+                }
+            }
+        }
+
+        // TODO: remove
+        private string Describe(Pod pod)
+        {
+            string s = string.Empty;
+            s += $"Phase: {pod.Phase}";
+            foreach (var container in pod.InitContainers)
+            {
+                s+= $" i {container.Name}: {container.State} {container.Reason} {container.Message} {container.RestartCount}";
+            }
+            foreach (var container in pod.Containers)
+            {
+                s+= $" c {container.Name}: {container.State} {container.Reason} {container.Message} {container.RestartCount}";
+            }
+            return s;
         }
 
         private JObject CreateBuildConfig(string name, string imageStreamName, string imageNamespace, string imageTag, string gitUrl, string gitRef, string startupProject, string sdkVersion)
