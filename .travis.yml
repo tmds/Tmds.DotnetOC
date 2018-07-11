@@ -1,0 +1,9 @@
+language: csharp
+
+script:
+  - dotnet pack src/Tmds.DotnetOC --configuration Release --version-suffix "$(date +"%y%m%d")-$TRAVIS_BUILD_NUMBER" --output .
+
+after_success:
+  - 'if [ "$TRAVIS_BRANCH" == "master" ] && [ "$TRAVIS_PULL_REQUEST" == "false" ]; then
+  curl -H "X-NuGet-ApiKey: $NUGET_APIKEY" -T src/Tmds.DotnetOC/Tmds.DotnetOC.*.nupkg https://www.myget.org/F/tmds/api/v2/package ;
+     fi'
