@@ -514,7 +514,7 @@ namespace Tmds.DotnetOC
 
         private JObject CreateBuildConfig(string name, string imageStreamName, string imageNamespace, string imageTag, string gitUrl, string gitRef, string startupProject, string sdkVersion)
         {
-            string content = File.ReadAllText("buildconfig.json");
+            string content = File.ReadAllText(PathUtils.ApplicationPath("buildconfig.json"));
             content = content.Replace("${NAME}", name);
             content = content.Replace("${IMAGE_STREAM_NAME}", imageStreamName);
             content = content.Replace("${SOURCE_REPOSITORY_URL}", gitUrl);
@@ -528,7 +528,7 @@ namespace Tmds.DotnetOC
 
         private JObject CreateDeploymentConfig(string name, string imageStreamName, int memoryLimit)
         {
-            string content = File.ReadAllText("deploymentconfig.json");
+            string content = File.ReadAllText(PathUtils.ApplicationPath("deploymentconfig.json"));
             content = content.Replace("${NAME}", name);
             content = content.Replace("${IMAGE_STREAM_NAME}", imageStreamName);
             content = content.Replace("${MEMORY_LIMIT}", memoryLimit.ToString());
@@ -537,7 +537,7 @@ namespace Tmds.DotnetOC
 
         private JObject CreateService(string name)
         {
-            string content = File.ReadAllText("service.json");
+            string content = File.ReadAllText(PathUtils.ApplicationPath("service.json"));
             content = content.Replace("${NAME}", name);
             return JObject.Parse(content);
         }
