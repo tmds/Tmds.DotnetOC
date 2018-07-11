@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using Newtonsoft.Json.Linq;
 
 namespace Tmds.DotnetOC
@@ -8,16 +10,66 @@ namespace Tmds.DotnetOC
         public string Image { get; set ;}
     }
 
+    class Build
+    {
+        public string PodName { get; set; }
+        public string StatusMessage { get; set; }
+        public string Phase { get; set; }
+        public string Reason { get; set; }
+        public int BuildNumber { get; set; }
+    }
+
+    class ContainerStatus
+    {
+        public string Name { get; set; }
+        public string State { get; set; }
+        public string Reason { get; set; }
+        public string Message { get; set; }
+        public int RestartCount { get; set; }
+        public bool Ready { get; set; }
+    }
+
+    class Pod
+    {
+        public string Phase { get; set; }
+        public string Name { get; set; }
+        public string DeploymentConfigLatestVersion { get; set; }
+
+        public ContainerStatus[] Containers { get; set; }
+
+        public ContainerStatus[] InitContainers { get; set; }
+    }
+
+    class ReplicationController
+    {
+        public string Phase { get; set; }
+        public string Version { get; set; }
+    }
+
     interface IOpenShift
     {
-        Result<bool> IsCommunity();
+        bool IsCommunity();
 
-        Result CheckDependencies();
+        void EnsureConnection();
 
-        Result CheckConnection();
+        ImageStreamTag[] GetImageTagVersions(string name, string ocNamespace);
 
-        Result<ImageStreamTag[]> GetImageTagVersions(string name, string ocNamespace);
+        void Create(JObject content, string ocNamespace = null);
 
-        Result Create(bool exists, JObject content, string ocNamespace = null);
+        void Replace(JObject value, string ocNamespace = null);
+
+        void CreateImageStream(string name);
+
+        string GetCurrentNamespace();
+
+        Build GetBuild(string buildConfigName, int? buildNumber = null, bool mustExist = true);
+
+        Result GetLog(string podName, string container, Action<StreamReader> reader, bool follow = false, bool ignoreError = false);
+
+        Pod GetPod(string podName, bool mustExist = true);
+
+        ReplicationController GetReplicationController(string deploymentConfigName, string version, bool mustExist = true);
+
+        Pod[] GetPods(string deploymentConfigName, string version);
     }
 }

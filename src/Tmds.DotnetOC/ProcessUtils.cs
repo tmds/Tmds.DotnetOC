@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -10,85 +11,136 @@ namespace Tmds.DotnetOC
 {
     static class ProcessUtils
     {
-        private class VoidType { }
+        sealed class VoidType {
+            public static readonly VoidType Instance = new VoidType();
+        };
 
-        public static Result Run(string filename, string arguments, JObject input)
+        private static Func<StreamReader, JObject> s_JObjectReader = _ => JObject.Load(new JsonTextReader(new StreamReader(_.BaseStream)));
+        private static Func<StreamReader, string> s_StringReader = _ => _.ReadToEnd();
+
+        public static Result Run(string filename, string arguments, ProcessStartInfo psi = null)
+            => Run<VoidType, VoidType>(filename, arguments, VoidType.Instance, psi);
+
+        public static Result<TOut> Run<TOut>(string filename, string arguments, ProcessStartInfo psi = null)
+            => Run<VoidType, TOut>(filename, arguments, VoidType.Instance, psi);
+
+        public static Result Run<TIn>(string filename, string arguments, TIn input, ProcessStartInfo psi = null)
+            => Run<TIn, VoidType>(filename, arguments, input, psi);
+
+        public static Result<TOut> Run<TIn, TOut>(string filename, string arguments, TIn input, ProcessStartInfo psi = null)
         {
-            return Run(filename, arguments,
-                        streamWriter =>
-                        {
-                            if (input != null)
-                            {
-                                using (var writer = new JsonTextWriter(streamWriter))
-                                {
-                                    input.WriteTo(writer);
-                                }
-                            }
-                        });
+            Func<StreamReader, TOut> readOutput;
+
+            if (typeof(TOut) == typeof(JObject))
+            {
+                readOutput = (Func<StreamReader, TOut>)(object)s_JObjectReader;
+            }
+            else if (typeof(TOut) == typeof(string))
+            {
+                readOutput = (Func<StreamReader, TOut>)(object)s_StringReader;
+            }
+            else if (typeof(TOut) == typeof(VoidType))
+            {
+                readOutput = null;
+            }
+            else
+            {
+                throw new NotSupportedException($"Cannot read type {typeof(TOut).FullName}");
+            }
+
+            Action<StreamWriter>  writeInput;
+            if (typeof(TIn) == typeof(JObject))
+            {
+                writeInput = streamWriter => {
+                    using (var writer = new JsonTextWriter(streamWriter))
+                    {
+                        ((JObject)(object)input).WriteTo(writer);
+                    }
+                };
+            }
+            else if (typeof(TIn) == typeof(string))
+            {
+                writeInput = writer => writer.Write(input.ToString());
+            }
+            else if (typeof(TIn) == typeof(VoidType))
+            {
+                writeInput = null;
+            }
+            else
+            {
+                throw new NotSupportedException($"Cannot write type {typeof(TIn).FullName}");
+            }
+
+            return Run(filename, arguments, readOutput, writeInput, psi);
         }
 
-        public static Result<JObject> RunAndGetJSon(string filename, string arguments)
-        {
-            return Run<JObject>(filename, arguments, _ => JObject.Load(new JsonTextReader(new StreamReader(_.BaseStream))), null);
-        }
+        public static Result Run(string filename, string arguments, Action<StreamReader> readOutput)
+            => Run<VoidType>(filename, arguments,
+                reader => {
+                    readOutput(reader);
+                    return VoidType.Instance; },
+                writeInput: null, psi: null);
 
-        public static Result Run(string filename, string arguments, Action<StreamWriter> writeInput = null)
+        private static Result<T> Run<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput, ProcessStartInfo psi)
         {
-            return RunAsync<VoidType>(filename, arguments, _ => null, writeInput).GetAwaiter().GetResult();
-        }
-
-        public static Result<T> Run<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput = null)
-        {
-            return RunAsync(filename, arguments, readOutput, writeInput).GetAwaiter().GetResult();
-        }
-
-        public static Task<Result<T>> RunAsync<T>(string filename, string arguments, Func<StreamReader, T> readOutput, Action<StreamWriter> writeInput)
-        {
-            var tcs = new TaskCompletionSource<Result<T>>();
+            // System.Console.WriteLine($"Executing {filename} {arguments}");
+            if (psi == null)
+            {
+                psi = new ProcessStartInfo();
+            }
+            psi.FileName = filename;
+            psi.Arguments = arguments;
+            psi.RedirectStandardError = true;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardInput = true;
             Process process = null;
             try
             {
-                process = new Process();
-                process.StartInfo.FileName = filename;
-                process.StartInfo.Arguments = arguments;
-                process.StartInfo.RedirectStandardError = true;
-                process.StartInfo.RedirectStandardOutput = true;
-                process.StartInfo.RedirectStandardInput = true;
-                process.EnableRaisingEvents = true;
-                StringBuilder sbOut = new StringBuilder();
-                StringBuilder sbError = null;
-                process.ErrorDataReceived += (_, e) =>
-                {
-                    if (sbError == null)
-                    {
-                        sbError = new StringBuilder();
-                    }
-                    sbError.Append(e.Data);
-                };
-                process.Exited += (_, e) =>
-                {
-                    Result<T> retval;
-                    if (process.ExitCode == 0)
-                    {
-                        retval = Result<T>.Success(readOutput(process.StandardOutput));
-                    }
-                    else
-                    {
-                        retval = Result<T>.Error(sbError?.ToString() ?? $"exit code: {process.ExitCode}");
-                    }
-                    tcs.SetResult(retval);
-                };
-                process.Start();
-                process.BeginErrorReadLine();
+                process = Process.Start(psi);
                 writeInput?.Invoke(process.StandardInput);
                 process.StandardInput.Close();
-                return tcs.Task;
+                Result<T> result = null;
+                Exception outputReadException = null;
+                if (readOutput != null)
+                {
+                    try
+                    {
+                        result = Result<T>.Success(readOutput(process.StandardOutput));
+                    }
+                    catch (Exception e)
+                    {
+                        outputReadException = e;
+                    }
+                }
+                else
+                {
+                    result = Result<T>.Success(default(T));
+                }
+                process.WaitForExit();
+                if (process.ExitCode == 0)
+                {
+                    if (outputReadException != null)
+                    {
+                        throw outputReadException;
+                    }
+                    return result;
+                }
+                else
+                {
+                    return Result<T>.Error(process.StandardError.ReadToEnd());
+                }
             }
             catch (Exception e)
             {
+                if (e is Win32Exception)
+                {
+                    throw new FailedException($"Executable '{filename} not found. Please install the application and add it to PATH.'");
+                }
+                throw;
+            }
+            finally
+            {
                 process?.Dispose();
-                tcs.SetException(e);
-                return tcs.Task;
             }
         }
 

@@ -1,0 +1,79 @@
+{
+    "kind": "DeploymentConfig",
+    "apiVersion": "v1",
+    "metadata": {
+        "name": "${NAME}"
+    },
+    "spec": {
+        "strategy": {
+            "type": "Rolling"
+        },
+        "triggers": [
+            {
+                "type": "ImageChange",
+                "imageChangeParams": {
+                    "automatic": true,
+                    "containerNames": [
+                        "dotnet-app"
+                    ],
+                    "from": {
+                        "kind": "ImageStreamTag",
+                        "name": "${IMAGE_STREAM_NAME}:latest"
+                    }
+                }
+            },
+            {
+                "type": "ConfigChange"
+            }
+        ],
+        "replicas": 1,
+        "selector": {
+            "name": "${NAME}"
+        },
+        "template": {
+            "metadata": {
+                "name": "${NAME}",
+                "labels": {
+                    "name": "${NAME}"
+                }
+            },
+            "spec": {
+                "containers": [
+                    {
+                        "name": "dotnet-app",
+                        "image": " ",
+                        "ports": [
+                            {
+                                "containerPort": 8080
+                            }
+                        ],
+                        "livenessProbe": {
+                            "httpGet": {
+                                "path": "/",
+                                "port": 8080,
+                                "scheme": "HTTP"
+                            },
+                            "initialDelaySeconds": 40,
+                            "timeoutSeconds": 15
+                        },
+                        "readinessProbe": {
+                            "httpGet": {
+                                "path": "/",
+                                "port": 8080,
+                                "scheme": "HTTP"
+                            },
+                            "initialDelaySeconds": 10,
+                            "timeoutSeconds": 30
+                        },
+                        "resources": {
+                            "limits": {
+                                "memory": "${MEMORY_LIMIT}Mi"
+                            }
+                        },
+                        "env": []
+                    }
+                ]
+            }
+        }
+    }
+}

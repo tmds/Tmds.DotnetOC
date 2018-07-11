@@ -4,6 +4,6 @@ namespace Tmds.DotnetOC
 {
     interface IS2iRepo
     {
-        Result<JObject> GetImageStreams(bool community);
+        JObject GetImageStreams(bool community);
     }
 }

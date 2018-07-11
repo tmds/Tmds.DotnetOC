@@ -25,31 +25,31 @@ namespace Tmds.DotnetOC
         public string ErrorMessage { get; }
     }
 
-    static class ResultExtensions
-    {
-        public static bool CheckFailed(this Result result, IConsole console)
-        {
-            if (!result.IsSuccess)
-            {
-                console.WriteErrorLine(result.ErrorMessage);
-            }
-            return !result.IsSuccess;
-        }
+    // static class ResultExtensions
+    // {
+    //     public static bool CheckFailed(this Result result, IConsole console)
+    //     {
+    //         if (!result.IsSuccess)
+    //         {
+    //             console.WriteErrorLine(result.ErrorMessage);
+    //         }
+    //         return !result.IsSuccess;
+    //     }
 
-        public static bool CheckFailed<T>(this Result<T> result, IConsole console, out T val)
-        {
-            if (!result.IsSuccess)
-            {
-                console.WriteErrorLine(result.ErrorMessage);
-                val = default(T);
-            }
-            else
-            {
-                val = result.Value;
-            }
-            return !result.IsSuccess;
-        }
-    }
+    //     public static bool CheckFailed<T>(this Result<T> result, IConsole console, out T val)
+    //     {
+    //         if (!result.IsSuccess)
+    //         {
+    //             console.WriteErrorLine(result.ErrorMessage);
+    //             val = default(T);
+    //         }
+    //         else
+    //         {
+    //             val = result.Value;
+    //         }
+    //         return !result.IsSuccess;
+    //     }
+    // }
 
     class Result<T> : Result
     {

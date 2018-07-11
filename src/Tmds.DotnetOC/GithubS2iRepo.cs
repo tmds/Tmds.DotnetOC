@@ -7,10 +7,18 @@ namespace Tmds.DotnetOC
         const string ImageStreamsUrl =          "https://raw.githubusercontent.com/redhat-developer/s2i-dotnetcore/master/dotnet_imagestreams.json";
         const string CommunityImageStreamsUrl = "https://raw.githubusercontent.com/redhat-developer/s2i-dotnetcore/master/dotnet_imagestreams_centos.json";
 
-        public Result<JObject> GetImageStreams(bool community)
+        public JObject GetImageStreams(bool community)
         {
             string imageStreamsUrl = community ? CommunityImageStreamsUrl : ImageStreamsUrl;
-            return HttpUtils.GetAsJObject(imageStreamsUrl);;
+            Result<JObject> result = HttpUtils.GetAsJObject(imageStreamsUrl);;
+            if (result.IsSuccess)
+            {
+                return result.Value;
+            }
+            else
+            {
+                throw new System.Exception($"Cannot retrieve 'imageStreamsUrl': {result.ErrorMessage}");
+            }
         }
     }
 }
