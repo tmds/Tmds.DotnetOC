@@ -36,7 +36,7 @@ namespace Tmds.DotnetOC
         public int Memory { get; } = 100;
 
         [Option("--startup-project", CommandOptionType.SingleValue)]
-        public string StartupProject { get; }
+        public string StartupProject { get; } // TODO: make this an arg too...
 
         [Option("--runtime-version", CommandOptionType.SingleValue)]
         public string RuntimeVersion { get; }
@@ -87,7 +87,7 @@ namespace Tmds.DotnetOC
             string gitRoot = GitUtils.FindRepoRoot(Path.GetDirectoryName(startupProjectFullName));
             if (gitRoot == null)
             {
-                Fail("The current directory is not a git repository.");
+                Fail("The project is not in a git repository.");
             }
 
             // Determine name
@@ -184,11 +184,12 @@ namespace Tmds.DotnetOC
                 {
                     return;
                 }
+
+                PrintEmptyLine();
             }
 
+            PrintLine($"Checking .NET Core {runtimeVersion} is installed on OpenShift...");
             _openshift.EnsureConnection();
-
-            PrintEmptyLine();
 
             // Check if runtime version is installed
             Func<ImageStreamTag, bool> FindRuntimeVersion = (ImageStreamTag tag) => tag.Version == runtimeVersion;
@@ -204,30 +205,37 @@ namespace Tmds.DotnetOC
                     {
                         Fail($"Runtime version {runtimeVersion} is not installed. You can run the 'install' command to install to the latest versions.");
                     }
-                    PrintLine($".NET Core {runtimeVersion} is not available.");
+                    PrintLine($".NET Core {runtimeVersion} is not installed.");
 
                     imageNamespace = _openshift.GetCurrentNamespace();
                     InstallDotnet(runtimeVersion, imageNamespace);
-
-                    PrintEmptyLine();
                 }
             }
+            else
+            {
+                PrintLine($".NET Core {runtimeVersion} is installed.");
+            }
+            PrintEmptyLine();
 
+            Print("Creating deployment config...");
             string imageStreamName = name;
             // Deployment config
             JObject deploymentConfig = CreateDeploymentConfig(name, imageStreamName, memory);
             _openshift.Create(deploymentConfig);
+            PrintLine("done");
 
             // Build config
+            Print("Creating build config...");
             string buildConfigName = name;
             JObject buildConfig = CreateBuildConfig(buildConfigName, imageStreamName, imageNamespace, $"dotnet:{runtimeVersion}", gitUrl, gitRef, startupProject, sdkVersion);
             _openshift.CreateImageStream(imageStreamName);
             _openshift.Create(buildConfig);
+            PrintLine("done");
 
             PrintEmptyLine();
 
             // Wait for build
-            PrintLine($"Waiting for build to start.");
+            PrintLine($"Waiting for build to start...");
             Build build = null;
             while (true)
             {
@@ -249,7 +257,7 @@ namespace Tmds.DotnetOC
             }
 
             // Wait for build
-            PrintLine($"Waiting for build pod {build.PodName}.");
+            PrintLine($"Waiting for build pod {build.PodName} to run...");
             while (true)
             {
                 Pod pod = _openshift.GetPod(build.PodName, mustExist: false);
@@ -261,8 +269,7 @@ namespace Tmds.DotnetOC
             }
 
             // Print build log
-            PrintLine("Build log:");
-            PrintPodLog(build.PodName);
+            PrintPodBuildLog(build.PodName);
 
             // Check build status
             build = _openshift.GetBuild(buildConfigName, buildNumber: build.BuildNumber);
@@ -271,8 +278,10 @@ namespace Tmds.DotnetOC
                 Fail($"The build failed: {build.Phase}({build.Reason}): {build.StatusMessage}");
             }
             PrintLine("Build finished succesfully.");
+            PrintEmptyLine();
 
             // Follow up on deployment
+            PrintLine("Deployment status:");
             string controllerPhase = null;
             var podStates = new Dictionary<string, string>();
             while (true)
@@ -281,15 +290,14 @@ namespace Tmds.DotnetOC
                 ReplicationController controller = _openshift.GetReplicationController(name, version: "1", mustExist: false);
                 if (controller != null)
                 {
-                    bool isDone = controller.Phase == "Complete" || controller.Phase == "Failed";
-                    if (controller.Phase != controllerPhase && !isDone)
-                    {
-                        PrintLine($"Deployment is {controller.Phase}");
-                    }
                     controllerPhase = controller.Phase;
                     Pod[] pods = _openshift.GetPods(name, version: "1");
                     foreach (var pod in pods)
                     {
+                        if (pod.Containers.Length == 0)
+                        {
+                            continue;
+                        }
                         ContainerStatus container = pod.Containers[0]; // pods have 1 container for the dotnet application
                         string containerState = null;
                         // user-friendly states:
@@ -297,11 +305,11 @@ namespace Tmds.DotnetOC
                         {
                             if (container.Ready)
                             {
-                                containerState = "is ready";
+                                containerState = "is ready.";
                             }
                             else
                             {
-                                containerState = "has started.";
+                                containerState = "has started, not ready.";
                             }
                         }
                         else if (container.State == "waiting")
@@ -350,27 +358,29 @@ namespace Tmds.DotnetOC
                         }
                     }
 
-                    if (isDone)
+                    if (controllerPhase == "Complete" || controllerPhase == "Failed")
                     {
                         break;
                     }
                 }
                 System.Threading.Thread.Sleep(1000);
             }
-
             if (controllerPhase == "Failed")
             {
                 Fail("Deployment failed.");
             }
             else
             {
-                PrintLine("Deployment finished succesfull.");
+                PrintLine("Deployment finished succesfully.");
             }
+            PrintEmptyLine();
 
             // Service
-            PrintLine("Creating service.");
+            Print("Creating service...");
             JObject service = CreateService(name);
             _openshift.Create(service);
+            PrintLine("done");
+            PrintEmptyLine();
 
             PrintLine("Application created succesfully.");
         }
@@ -381,7 +391,7 @@ namespace Tmds.DotnetOC
             bool community = _openshift.IsCommunity();
             var installOperations = new InstallOperations(_openshift, _s2iRepo);
 
-            PrintLine("Checking available versions.");
+            PrintLine("Checking latest available versions...");
             string[] s2iVersions = installOperations.GetLatestVersions(community);
             if (!s2iVersions.Contains(runtimeVersion))
             {
@@ -404,12 +414,13 @@ namespace Tmds.DotnetOC
             installOperations.UpdateToLatest(community, ocNamespace);
         }
 
-        private void PrintPodLog(string podName)
+        private void PrintPodBuildLog(string podName)
         {
+            bool printedBuildLog = false;
             string previousContainer = null;
             while (true)
             {
-                Pod pod = _openshift.GetPod(podName, mustExist: false);
+                Pod pod = _openshift.GetPod(podName);
                 bool useNext = previousContainer == null;
                 ContainerStatus nextContainer = null;
                 foreach (var cont in pod.InitContainers)
@@ -435,24 +446,36 @@ namespace Tmds.DotnetOC
                 }
                 if (nextContainer == null)
                 {
-                    break;
-                }
-                if (nextContainer.State == "running" || nextContainer.State == "terminated")
-                {
-                    Result result = _openshift.GetLog(podName, nextContainer.Name, ReadToConsole, follow: true, ignoreError: true);
-                    if (!result.IsSuccess)
-                    {
-                        PrintLine($"Container {nextContainer.Name} is {nextContainer.Reason}: {nextContainer.Message}");
-                    }
-                    previousContainer = nextContainer.Name;
-                }
-                else // nextContainer.State == "waiting"
-                {
-                    if (pod.Phase != "Pending" && pod.Phase != "Running")
+                    if (pod.Phase != "Pending")
                     {
                         break;
                     }
                     System.Threading.Thread.Sleep(1000);
+                }
+                else
+                {
+                    if (nextContainer.State == "running" || nextContainer.State == "terminated")
+                    {
+                        if (!printedBuildLog)
+                        {
+                            PrintLine("Build log:");
+                            printedBuildLog = true;
+                        }
+                        Result result = _openshift.GetLog(podName, nextContainer.Name, ReadToConsole, follow: true, ignoreError: true);
+                        if (!result.IsSuccess)
+                        {
+                            PrintLine($"Container {nextContainer.Name} is {nextContainer.Reason}: {nextContainer.Message}");
+                        }
+                        previousContainer = nextContainer.Name;
+                    }
+                    else // nextContainer.State == "waiting"
+                    {
+                        if (pod.Phase != "Pending" && pod.Phase != "Running")
+                        {
+                            break;
+                        }
+                        System.Threading.Thread.Sleep(1000);
+                    }
                 }
             }
         }
