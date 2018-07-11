@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json.Linq;
 
@@ -17,6 +18,17 @@ namespace Tmds.DotnetOC
         public string Phase { get; set; }
         public string Reason { get; set; }
         public int BuildNumber { get; set; }
+    }
+
+    class S2iBuildConfig
+    {
+        public string Name { get; set; }
+        public string GitRef { get; set; }
+        public string GitUri { get; set; }
+        public string ImageName { get; set; }
+        public string ImageVersion { get; set; }
+        public Dictionary<string, string> Environment { get; set; }
+        public string OutputName { get; set; }
     }
 
     class ContainerStatus
@@ -46,6 +58,38 @@ namespace Tmds.DotnetOC
         public string Version { get; set; }
     }
 
+   class DeploymentConfig
+    {
+        public string Name { get; set; }
+        public int Replicas { get; set; }
+        public ImageChangeTrigger[] Triggers { get; set; }
+        public string[] Labels { get; set; }
+    }
+
+    class ImageChangeTrigger
+    {
+        public string FromName { get; set; }
+    }
+
+    class Service
+    {
+        public string Name { get; set; }
+        public string[] Selectors { get; set; }
+    }
+
+    class Route
+    {
+        public string Name { get; set; }
+        public string Host { get; set; }
+        public ServiceBackend[] Backends { get; set; }
+    }
+
+    class ServiceBackend
+    {
+        public int Weight { get; set; }
+        public string Name { get; set; }
+    }
+
     interface IOpenShift
     {
         bool IsCommunity();
@@ -71,5 +115,13 @@ namespace Tmds.DotnetOC
         ReplicationController GetReplicationController(string deploymentConfigName, string version, bool mustExist = true);
 
         Pod[] GetPods(string deploymentConfigName, string version);
+
+        S2iBuildConfig[] GetS2iBuildConfigs();
+
+        DeploymentConfig[] GetDeploymentConfigs();
+
+        Service[] GetServices();
+
+        Route[] GetRoutes();
     }
 }

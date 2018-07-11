@@ -4,6 +4,7 @@ namespace Tmds.DotnetOC
 {
     [Command(Description = "Deploy/update/remove .NET Core applications.")]
     [Subcommand("new", typeof(AppNewCommand))]
+    [Subcommand("list", typeof(AppListCommand))]
     class AppCommand
     {
         int OnExecute(CommandLineApplication app)
