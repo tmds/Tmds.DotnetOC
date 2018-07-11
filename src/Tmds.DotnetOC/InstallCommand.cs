@@ -33,21 +33,20 @@ namespace Tmds.DotnetOC
             _openshift.EnsureConnection();
 
             // Check if this is a community or RH supported version
-            bool community = false;  _openshift.IsCommunity();
+            bool community = _openshift.IsCommunity();
+
+            var installOperations = new InstallOperations(_openshift, _s2iRepo);
+
+            string ocNamespace = Global ? "openshift" : null;
 
             // Retrieve installed versions
             Print("Retrieving installed versions: ");
-            string ocNamespace = Global ? "openshift" : null;
-            ImageStreamTag[] namespaceStreamTags = _openshift.GetImageTagVersions("dotnet", ocNamespace: ocNamespace);
-            string[] namespaceVersions = namespaceStreamTags.Select(t => t.Version).ToArray();
-            VersionStringSorter.Sort(namespaceVersions);
+            string[] namespaceVersions = installOperations.GetInstalledVersions(ocNamespace);
             PrintLine(string.Join(", ", namespaceVersions));
 
             // Retrieve latest versions
             Print("Retrieving latest versions   : ");
-            JObject s2iImageStreams = _s2iRepo.GetImageStreams(community);
-            string[] s2iVersions = ImageStreamListParser.GetTags(s2iImageStreams, "dotnet");
-            VersionStringSorter.Sort(s2iVersions);
+            string[] s2iVersions = installOperations.GetLatestVersions(community);
             PrintLine(string.Join(", ", s2iVersions));
 
             PrintEmptyLine();
@@ -55,27 +54,18 @@ namespace Tmds.DotnetOC
             // Compare installed and latest versions
             if (!Force)
             {
-                IEnumerable<string> newVersions = s2iVersions.Except(namespaceVersions);
-                IEnumerable<string> removedVersions = namespaceVersions.Except(s2iVersions);
-                if (removedVersions.Any())
+                VersionCheckResult result = installOperations.CompareVersions(community, ocNamespace);
+                if (result == VersionCheckResult.UnknownVersions)
                 {
                     Fail("Namespace has unknown versions. Use '--force' to overwrite.");
                 }
-                if (!newVersions.Any())
+                else if (result == VersionCheckResult.AlreadyUpToDate)
                 {
                     PrintLine("Already up-to-date. Use '--force' to sync all metadata.");
-                    return;
                 }
             }
 
-            if (namespaceVersions.Length != 0)
-            {
-                _openshift.Replace(s2iImageStreams, ocNamespace);
-            }
-            else
-            {
-                _openshift.Create(s2iImageStreams, ocNamespace);
-            }
+            installOperations.UpdateToLatest(community, ocNamespace);
 
             PrintLine("Succesfully updated.");
         }

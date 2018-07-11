@@ -86,6 +86,7 @@ namespace Tmds.DotnetOC
 
         public string GetCurrentNamespace()
         {
+            // TODO: cache this
             Result<string> result = ProcessUtils.Run<string>("oc", "project -q");
             if (result.IsSuccess)
             {

@@ -12,10 +12,12 @@ namespace Tmds.DotnetOC
     class AppNewCommand : CommandBase
     {
         private readonly IOpenShift _openshift;
-        public AppNewCommand(IConsole console, IOpenShift openshift)
+        private readonly IS2iRepo _s2iRepo;
+        public AppNewCommand(IConsole console, IOpenShift openshift, IS2iRepo s2iRepo)
             : base(console)
         {
             _openshift = openshift;
+            _s2iRepo = s2iRepo;
         }
 
         [Option("-n|--name", CommandOptionType.SingleValue)]
@@ -41,6 +43,9 @@ namespace Tmds.DotnetOC
 
         [Option("-y", "Assume yes", CommandOptionType.NoValue)]
         public bool AssumeYes { get; }
+
+        [Option("-no-install", "Don't update dotnet versions when unsupported", CommandOptionType.NoValue)]
+        public bool NoInstall { get; }
 
         protected override async Task ExecuteAsync(CommandLineApplication app)
         {
@@ -183,6 +188,8 @@ namespace Tmds.DotnetOC
 
             _openshift.EnsureConnection();
 
+            PrintEmptyLine();
+
             // Check if runtime version is installed
             Func<ImageStreamTag, bool> FindRuntimeVersion = (ImageStreamTag tag) => tag.Version == runtimeVersion;
             string imageNamespace = _openshift.GetCurrentNamespace();
@@ -193,9 +200,17 @@ namespace Tmds.DotnetOC
                 streamTags = _openshift.GetImageTagVersions("dotnet", imageNamespace);
                 if (!streamTags.Any(FindRuntimeVersion))
                 {
-                    Fail($"Runtime version {runtimeVersion} is not installed. You can run the 'install' command to install to the latest versions.");
+                    if (NoInstall)
+                    {
+                        Fail($"Runtime version {runtimeVersion} is not installed. You can run the 'install' command to install to the latest versions.");
+                    }
+                    PrintLine($".NET Core {runtimeVersion} is not available.");
+
+                    imageNamespace = _openshift.GetCurrentNamespace();
+                    InstallDotnet(runtimeVersion, imageNamespace);
+
+                    PrintEmptyLine();
                 }
-                // TODO: install streams when available (+ opt-out)
             }
 
             string imageStreamName = name;
@@ -209,13 +224,15 @@ namespace Tmds.DotnetOC
             _openshift.CreateImageStream(imageStreamName);
             _openshift.Create(buildConfig);
 
+            PrintEmptyLine();
+
             // Wait for build
-            PrintLine($"Waiting for build.");
+            PrintLine($"Waiting for build to start.");
             Build build = null;
             while (true)
             {
                 build = _openshift.GetBuild(buildConfigName, buildNumber: null, mustExist: false);
-                if (build.Phase == "New" && string.IsNullOrEmpty(build.Reason))
+                if (build != null && build.Phase == "New" && string.IsNullOrEmpty(build.Reason))
                 {
                     build = null;
                 }
@@ -303,7 +320,7 @@ namespace Tmds.DotnetOC
                             if (string.IsNullOrEmpty(container.Message))
                             {
                                 if (container.Reason == "Error" ||
-                                    container.Reason == "Completed ||
+                                    container.Reason == "Completed" ||
                                     string.IsNullOrEmpty(container.Reason))
                                 {
                                     containerState = "has terminated.";
@@ -356,6 +373,35 @@ namespace Tmds.DotnetOC
             _openshift.Create(service);
 
             PrintLine("Application created succesfully.");
+        }
+
+        private void InstallDotnet(string runtimeVersion, string ocNamespace)
+        {
+            // Check if this is a community or RH supported version
+            bool community = _openshift.IsCommunity();
+            var installOperations = new InstallOperations(_openshift, _s2iRepo);
+
+            PrintLine("Checking available versions.");
+            string[] s2iVersions = installOperations.GetLatestVersions(community);
+            if (!s2iVersions.Contains(runtimeVersion))
+            {
+                if (community)
+                {
+                    s2iVersions = installOperations.GetLatestVersions(community: false);
+                    if (s2iVersions.Contains(runtimeVersion))
+                    {
+                        Fail($".NET Core {runtimeVersion} is not yet available on OpenShift Origin. It is available as part of Red Hat CDK which can be downloaded with the no-cost developer subscription.");
+                    }
+                }
+                Fail($".NET Core {runtimeVersion} is not yet supported.");
+            }
+            VersionCheckResult versionCheck = installOperations.CompareVersions(community, ocNamespace);
+            if (versionCheck == VersionCheckResult.UnknownVersions)
+            {
+                Fail("Unknown versions are installed. You can use the 'install' command options to overwrite these versions and install the missing version.");
+            }
+            PrintLine($"Updating the installed version to include {runtimeVersion}.");
+            installOperations.UpdateToLatest(community, ocNamespace);
         }
 
         private void PrintPodLog(string podName)
