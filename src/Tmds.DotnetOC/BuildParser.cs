@@ -7,38 +7,39 @@ namespace Tmds.DotnetOC
 {
     static class BuildParser
     {
-        public static Build GetBuild(JObject builds, string buildConfigName, int? desiredBuild)
+        public static Build ParseBuild(JObject build)
         {
-            JObject jobject = builds;
-            Build build = null;
-            int highestBuildNumber = -1;
-            foreach (var item in jobject["items"])
+            int buildNumber = int.Parse((string)build["metadata"]["annotations"]["openshift.io/build.number"]);
+            string podName = (string)build["metadata"]["annotations"]["openshift.io/build.pod-name"];
+            JToken status = build["status"];
+            string statusMessage = (string)status["message"];
+            string phase = (string)status["phase"];
+            string imageDigest = (string)status["output"]?["to"]?["imageDigest"];
+            string reason = (string)status["reason"];
+            JToken revisionTag = build["spec"]["revision"];
+            string commit;
+            string commitMessage;
+            if (revisionTag != null)
             {
-                int buildNumber = int.Parse((string)item["metadata"]["annotations"]["openshift.io/build.number"]);
-                if (buildNumber <= highestBuildNumber)
-                {
-                    continue;
-                }
-                highestBuildNumber = buildNumber;
-                string podName = (string)item["metadata"]["annotations"]["openshift.io/build.pod-name"];
-                JToken status = item["status"];
-                string statusMessage = (string)status["message"];
-                string phase = (string)status["phase"];
-                string reason = (string)status["reason"];
-                build = new Build
-                {
-                    PodName = podName,
-                    StatusMessage = statusMessage,
-                    Phase = phase,
-                    Reason = reason,
-                    BuildNumber = buildNumber
-                };
-                if (buildNumber == desiredBuild)
-                {
-                    return build;
-                }
+                commit = (string)build["spec"]["revision"]["git"]["commit"];
+                commitMessage = (string)build["spec"]["revision"]["git"]["message"];
             }
-            return build;
+            else
+            {
+                commit = (string)build["spec"]["source"]["git"]["ref"];
+                commitMessage = "??";
+            }
+            return new Build
+            {
+                PodName = podName,
+                StatusMessage = statusMessage,
+                Phase = phase,
+                Reason = reason,
+                BuildNumber = buildNumber,
+                Commit = commit,
+                CommitMessage = commitMessage,
+                ImageDigest = imageDigest
+            };
         }
     }
 }

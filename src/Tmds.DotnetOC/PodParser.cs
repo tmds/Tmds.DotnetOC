@@ -47,6 +47,14 @@ namespace Tmds.DotnetOC
                 string message = (string)childState["message"];
                 int restartCount = (int)containerStatus["restartCount"];
                 bool ready = (bool)containerStatus["ready"];
+                DateTime? startedAt = null;
+                JToken startedAtToken = childState["startedAt"];
+                string image = (string)containerStatus["imageID"];
+                string imageDigest = image.Substring(image.LastIndexOf("@") + 1); // TODO: we should parse this from spec
+                if (startedAtToken != null)
+                {
+                    startedAt = DateTime.Parse((string)startedAtToken);
+                }
                 containerStatuses.Add(
                     new ContainerStatus
                     {
@@ -55,7 +63,9 @@ namespace Tmds.DotnetOC
                         RestartCount = restartCount,
                         State = state,
                         Name = name,
-                        Ready = ready
+                        Ready = ready,
+                        StartedAt = startedAt,
+                        ImageDigest = imageDigest
                     }
                 );
             }
