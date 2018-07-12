@@ -138,7 +138,7 @@ namespace Tmds.DotnetOC
                 {
                     return null;
                 }
-                throw new FailedException($"Cannot get build information: {result.ErrorMessage}");
+                throw new FailedException($"Cannot get pod information: {result.ErrorMessage}");
             }
         }
 
@@ -160,7 +160,7 @@ namespace Tmds.DotnetOC
             }
             else
             {
-                throw new FailedException($"Cannot get build information: {result.ErrorMessage}");
+                throw new FailedException($"Cannot get pod information: {result.ErrorMessage}");
             }
         }
 
@@ -190,6 +190,82 @@ namespace Tmds.DotnetOC
                     return null;
                 }
                 throw new FailedException($"Cannot get replication controller: {result.ErrorMessage}");
+            }
+        }
+
+        public S2iBuildConfig[] GetS2iBuildConfigs(string imageName)
+        {
+            Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get bc -o json");
+            if (result.IsSuccess)
+            {
+                var buildConfigs = new List<S2iBuildConfig>();
+                foreach (var item in result.Value["items"])
+                {
+                    var buildConfig = BuildConfigParser.ParseS2iBuildConfig(item as JObject);
+                    if (buildConfig != null && buildConfig.ImageName == imageName)
+                    {
+                        buildConfigs.Add(buildConfig);
+                    }
+                }
+                return buildConfigs.ToArray();
+            }
+            else
+            {
+                throw new FailedException($"Cannot get build configurations: {result.ErrorMessage}");
+            }
+        }
+
+        public DeploymentConfig[] GetDeploymentConfigs()
+        {
+            Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get dc -o json");
+            if (result.IsSuccess)
+            {
+                var deployConfigs = new List<DeploymentConfig>();
+                foreach (var item in result.Value["items"])
+                {
+                    deployConfigs.Add(DeploymentConfigParser.ParseDeploymentConfig(item as JObject));
+                }
+                return deployConfigs.ToArray();
+            }
+            else
+            {
+                throw new FailedException($"Cannot get deployment configurations: {result.ErrorMessage}");
+            }
+        }
+
+        public Service[] GetServices()
+        {
+            Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get svc -o json");
+            if (result.IsSuccess)
+            {
+                var services = new List<Service>();
+                foreach (var item in result.Value["items"])
+                {
+                    services.Add(ServiceParser.ParseService(item as JObject));
+                }
+                return services.ToArray();
+            }
+            else
+            {
+                throw new FailedException($"Cannot get services: {result.ErrorMessage}");
+            }
+        }
+
+        public Route[] GetRoutes()
+        {
+            Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get route -o json");
+            if (result.IsSuccess)
+            {
+                var routes = new List<Route>();
+                foreach (var item in result.Value["items"])
+                {
+                    routes.Add(RouteParser.ParseRoute(item as JObject));
+                }
+                return routes.ToArray();
+            }
+            else
+            {
+                throw new FailedException($"Cannot get routes: {result.ErrorMessage}");
             }
         }
     }

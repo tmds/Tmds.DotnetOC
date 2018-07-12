@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 using McMaster.Extensions.CommandLineUtils;
 
@@ -41,6 +43,42 @@ namespace Tmds.DotnetOC
         }
 
         protected void PrintEmptyLine() => PrintLine(string.Empty);
+
+        protected void PrintTable<T>(string[] columns, List<T> values, Func<string, T, string> rowValue)
+        {
+            int rowCount = values.Count + 1;
+            string[,] cellStrings = new string[columns.Length, rowCount];
+            for (int i = 0; i < columns.Length; i++)
+            {
+                cellStrings[i, 0] = columns[i];
+                for (int j = 0; j < values.Count; j++)
+                {
+                    cellStrings[i, j + 1] = rowValue(columns[i], values[j]);
+                }
+            }
+            var columnWidths = new int[columns.Length];
+            for (int i = 0; i < columns.Length; i++)
+            {
+                int width = 0;
+                for (int j = 0; j < rowCount; j++)
+                {
+                    width = Math.Max(cellStrings[i, j].Length + 2, width);
+                }
+                columnWidths[i] = width;
+            }
+            StringBuilder line = new StringBuilder();
+            for (int j = 0; j < rowCount; j++)
+            {
+                for (int i = 0; i < columns.Length; i++)
+                {
+                    string cellString = cellStrings[i, j];
+                    line.AppendFormat(cellString);
+                    line.Append(' ', columnWidths[i] - cellString.Length);
+                }
+                PrintLine(line.ToString());
+                line.Clear();
+            }
+        }
 
         protected bool PromptYesNo(string prompt, bool defaultAnswer)
         {
