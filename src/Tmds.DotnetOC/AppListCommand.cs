@@ -15,48 +15,9 @@ namespace Tmds.DotnetOC
             _openshift = openshift;
         }
 
-        class S2IDeployment
-        {
-            public DeploymentConfig DeploymentConfig { get; set; }
-            public S2iBuildConfig BuildConfig { get; set; }
-            public Service[] Services { get; set; }
-            public Route[] Routes { get; set; }
-        }
-
         protected override async Task ExecuteAsync(CommandLineApplication app)
         {
-            var buildConfigs = _openshift.GetS2iBuildConfigs("dotnet");
-            var deploymentConfigs = _openshift.GetDeploymentConfigs();
-            var services = _openshift.GetServices();
-            var routes = _openshift.GetRoutes();
-
-            var deployments = new List<S2IDeployment>();
-            foreach (var deploymentConfig in deploymentConfigs)
-            {
-                foreach (var trigger in deploymentConfig.Triggers)
-                {
-                    S2iBuildConfig buildConfig = buildConfigs.FirstOrDefault(
-                        bc => bc.OutputName == trigger.FromName
-                    );
-                    if (buildConfig == null)
-                    {
-                        continue;
-                    }
-                    Service[] deploymentServices = services.Where(
-                        svc => svc.Selectors.IsSubsetOf(deploymentConfig.Labels)
-                    ).ToArray();
-                    Route[] deploymentRoutes = routes.Where(
-                        rt => rt.Backends.Any(be => deploymentServices.Any(ds => ds.Name == be.Name))
-                    ).ToArray();
-                    deployments.Add(new S2IDeployment
-                    {
-                        DeploymentConfig = deploymentConfig,
-                        BuildConfig = buildConfig,
-                        Services = deploymentServices,
-                        Routes = deploymentRoutes
-                    });
-                }
-            }
+            var deployments = _openshift.GetDotnetDeployments();
 
             const string Deployment = "DEPLOYMENT";
             const string Services = "SERVICES";

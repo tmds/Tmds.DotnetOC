@@ -98,19 +98,37 @@ namespace Tmds.DotnetOC
             }
         }
 
-        public Build GetBuild(string buildConfigName, int? buildNumber, bool mustExist)
+        public Build GetBuild(string buildConfigName, int buildNumber, bool mustExist)
+        {
+            Build[] builds = GetBuilds(buildConfigName);
+            foreach (var build in builds)
+            {
+                if (build.BuildNumber == buildNumber)
+                {
+                    return build;
+                }
+            }
+            if (mustExist)
+            {
+                throw new FailedException($"Cannot find build");
+            }
+            return null;
+        }
+
+        public Build[] GetBuilds(string buildConfigName)
         {
             Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get builds -l openshift.io/build-config.name={buildConfigName} -o json");
             if (result.IsSuccess)
             {
-                return BuildParser.GetBuild(result.Value, buildConfigName, buildNumber);
+                var builds = new List<Build>();
+                foreach (var item in result.Value["items"])
+                {
+                    builds.Add(BuildParser.ParseBuild(item as JObject));
+                }
+                return builds.ToArray();
             }
             else
             {
-                if (!mustExist && result.ErrorMessage.Contains("NotFound"))
-                {
-                    return null;
-                }
                 throw new FailedException($"Cannot get build information: {result.ErrorMessage}");
             }
         }
@@ -127,6 +145,10 @@ namespace Tmds.DotnetOC
 
         public Pod GetPod(string podName, bool mustExist)
         {
+            if (string.IsNullOrEmpty(podName))
+            {
+                throw new ArgumentException(nameof(podName));
+            }
             Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get pod {podName} -o json");
             if (result.IsSuccess)
             {
@@ -151,7 +173,7 @@ namespace Tmds.DotnetOC
                 foreach (var item in result.Value["items"])
                 {
                     var pod = PodParser.ParsePod(item as JObject);
-                    if (pod.DeploymentConfigLatestVersion == version)
+                    if (version == null || pod.DeploymentConfigLatestVersion == version) // TODO: version == null?
                     {
                         pods.Add(pod);
                     }

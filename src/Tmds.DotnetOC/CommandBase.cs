@@ -44,7 +44,7 @@ namespace Tmds.DotnetOC
 
         protected void PrintEmptyLine() => PrintLine(string.Empty);
 
-        protected void PrintTable<T>(string[] columns, List<T> values, Func<string, T, string> rowValue)
+        protected void PrintTable<T>(string[] columns, IList<T> values, Func<string, T, string> rowValue)
         {
             int rowCount = values.Count + 1;
             string[,] cellStrings = new string[columns.Length, rowCount];
@@ -62,7 +62,8 @@ namespace Tmds.DotnetOC
                 int width = 0;
                 for (int j = 0; j < rowCount; j++)
                 {
-                    width = Math.Max(cellStrings[i, j].Length + 2, width);
+                    string cellString = cellStrings[i, j] ?? string.Empty;
+                    width = Math.Max(cellString.Length + 2, width);
                 }
                 columnWidths[i] = width;
             }
@@ -71,7 +72,7 @@ namespace Tmds.DotnetOC
             {
                 for (int i = 0; i < columns.Length; i++)
                 {
-                    string cellString = cellStrings[i, j];
+                    string cellString = cellStrings[i, j] ?? string.Empty;
                     line.AppendFormat(cellString);
                     line.Append(' ', columnWidths[i] - cellString.Length);
                 }

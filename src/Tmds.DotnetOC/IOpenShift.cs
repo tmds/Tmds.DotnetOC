@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 
 namespace Tmds.DotnetOC
@@ -18,6 +19,9 @@ namespace Tmds.DotnetOC
         public string Phase { get; set; }
         public string Reason { get; set; }
         public int BuildNumber { get; set; }
+        public string Commit { get; set; }
+        public string CommitMessage { get; set; }
+        public string ImageDigest { get; set; }
     }
 
     class S2iBuildConfig
@@ -39,6 +43,8 @@ namespace Tmds.DotnetOC
         public string Message { get; set; }
         public int RestartCount { get; set; }
         public bool Ready { get; set; }
+        public DateTime? StartedAt { get; set; }
+        public string ImageDigest { get; set; }
     }
 
     class Pod
@@ -108,7 +114,9 @@ namespace Tmds.DotnetOC
 
         string GetCurrentNamespace();
 
-        Build GetBuild(string buildConfigName, int? buildNumber = null, bool mustExist = true);
+        Build GetBuild(string buildConfigName, int buildNumber, bool mustExist = true);
+
+        Build[] GetBuilds(string buildConfigName);
 
         Result GetLog(string podName, string container, Action<StreamReader> reader, bool follow = false, bool ignoreError = false);
 
@@ -125,5 +133,79 @@ namespace Tmds.DotnetOC
         Service[] GetServices();
 
         Route[] GetRoutes();
+    }
+
+    class S2IDeployment
+    {
+        public DeploymentConfig DeploymentConfig { get; set; }
+        public S2iBuildConfig BuildConfig { get; set; }
+        public Service[] Services { get; set; }
+        public Route[] Routes { get; set; }
+    }
+
+    static class OpenShiftExtensions
+    {
+        public static S2IDeployment[] GetDotnetDeployments(this IOpenShift openshift)
+            => GetDotnetDeploymentsCore(openshift);
+
+        public static S2IDeployment GetDotnetDeployment(this IOpenShift openshift, string name)
+        {
+            if (name == null)
+            {
+                throw new ArgumentNullException(nameof(name));
+            }
+            S2IDeployment[] deployments = GetDotnetDeploymentsCore(openshift, name);
+            if (deployments.Length == 0)
+            {
+                throw new FailedException("Deployment not found.");
+            }
+            return deployments[0];
+        }
+
+        public static S2IDeployment[] GetDotnetDeploymentsCore(this IOpenShift openshift, string deploymentName = null)
+        {
+            var buildConfigs = openshift.GetS2iBuildConfigs("dotnet");
+            var deploymentConfigs = openshift.GetDeploymentConfigs();
+            var services = openshift.GetServices();
+            var routes = openshift.GetRoutes();
+
+            var deployments = new List<S2IDeployment>();
+            foreach (var deploymentConfig in deploymentConfigs)
+            {
+                if (deploymentName != null && deploymentConfig.Name != deploymentName)
+                {
+                    continue;
+                }
+                foreach (var trigger in deploymentConfig.Triggers)
+                {
+                    S2iBuildConfig buildConfig = buildConfigs.FirstOrDefault(
+                        bc => bc.OutputName == trigger.FromName
+                    );
+                    if (buildConfig == null)
+                    {
+                        continue;
+                    }
+                    Service[] deploymentServices = services.Where(
+                        svc => svc.Selectors.IsSubsetOf(deploymentConfig.Labels)
+                    ).ToArray();
+                    Route[] deploymentRoutes = routes.Where(
+                        rt => rt.Backends.Any(be => deploymentServices.Any(ds => ds.Name == be.Name))
+                    ).ToArray();
+                    deployments.Add(new S2IDeployment
+                    {
+                        DeploymentConfig = deploymentConfig,
+                        BuildConfig = buildConfig,
+                        Services = deploymentServices,
+                        Routes = deploymentRoutes
+                    });
+                }
+                if (deploymentName != null && deploymentConfig.Name == deploymentName)
+                {
+                    break;
+                }
+            }
+
+            return deployments.ToArray();
+        }
     }
 }

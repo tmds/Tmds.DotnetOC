@@ -239,7 +239,7 @@ namespace Tmds.DotnetOC
             Build build = null;
             while (true)
             {
-                build = _openshift.GetBuild(buildConfigName, buildNumber: null, mustExist: false);
+                build = _openshift.GetBuild(buildConfigName, buildNumber: 1, mustExist: false);
                 if (build != null && build.Phase == "New" && string.IsNullOrEmpty(build.Reason))
                 {
                     build = null;
