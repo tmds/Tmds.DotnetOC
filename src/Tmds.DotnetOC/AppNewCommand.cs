@@ -36,7 +36,7 @@ namespace Tmds.DotnetOC
         public int Memory { get; } = 100;
 
         [Option("--startup-project", CommandOptionType.SingleValue)]
-        public string StartupProject { get; } // TODO: make this an arg too...
+        public string StartupProject { get; }
 
         [Option("--runtime-version", CommandOptionType.SingleValue)]
         public string RuntimeVersion { get; }
@@ -47,11 +47,19 @@ namespace Tmds.DotnetOC
         [Option("-no-install", "Don't update dotnet versions when unsupported", CommandOptionType.NoValue)]
         public bool NoInstall { get; }
 
+        [Argument(0, "project")]
+        private string Project { get; } // TODO: try to guess this
+
         protected override async Task ExecuteAsync(CommandLineApplication app)
         {
+            if (Project == null)
+            {
+                Fail("project is a required argument");
+            }
+
             // Find the startup project file
             bool multipleProjectFiles = false;
-            string startupProjectFullName = StartupProject;
+            string startupProjectFullName = Project;
             if (startupProjectFullName == null)
             {
                 startupProjectFullName = ".";
@@ -100,12 +108,20 @@ namespace Tmds.DotnetOC
             }
 
             // Determine startup project
-            string startupProject = startupProjectFullName;
-            if (!multipleProjectFiles)
+            string startupProject;
+            if (StartupProject != null)
             {
-                startupProject = Path.GetDirectoryName(startupProject);
+                startupProject = StartupProject;
             }
-            startupProject = startupProject.Substring(gitRoot.Length + 1);
+            else
+            {
+                startupProject =  startupProjectFullName;
+                if (!multipleProjectFiles)
+                {
+                    startupProject = Path.GetDirectoryName(startupProject);
+                }
+                startupProject = startupProject.Substring(gitRoot.Length + 1);
+            }
 
             // Determine git url
             string gitUrl = GitUrl;
@@ -127,6 +143,10 @@ namespace Tmds.DotnetOC
             if (gitRef == null)
             {
                 gitRef = GitUtils.GetCurrentBranch(gitRoot);
+            }
+            if (gitRef == "HEAD")
+            {
+                gitRef = GitUtils.GetHeadCommitId(gitRoot);
             }
             if (gitRef == null)
             {
@@ -155,11 +175,7 @@ namespace Tmds.DotnetOC
             string sdkVersion = SdkVerison;
             if (sdkVersion == null)
             {
-                sdkVersion = DotnetUtils.GetSdkVersion();
-                if (sdkVersion == null)
-                {
-                    sdkVersion = runtimeVersion + ".0";
-                }
+                sdkVersion = string.Empty;
             }
 
             // Determine memory
@@ -171,7 +187,7 @@ namespace Tmds.DotnetOC
             PrintLine($" - git-ref         : {gitRef}");
             PrintLine($" - startup-project : {startupProject}");
             PrintLine($" - runtime-version : {runtimeVersion}");
-            PrintLine($" - sdk-version     : {sdkVersion}");
+            PrintLine($" - sdk-version     : {(string.IsNullOrEmpty(sdkVersion) ? "(image default)" : sdkVersion)}");
             PrintLine($" - memory (MB)     : {memory}");
 
             PrintEmptyLine();
