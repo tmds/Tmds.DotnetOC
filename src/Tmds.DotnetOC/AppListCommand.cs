@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -24,7 +25,7 @@ namespace Tmds.DotnetOC
 
         protected override async Task ExecuteAsync(CommandLineApplication app)
         {
-            var buildConfigs = _openshift.GetS2iBuildConfigs();
+            var buildConfigs = _openshift.GetS2iBuildConfigs("dotnet");
             var deploymentConfigs = _openshift.GetDeploymentConfigs();
             var services = _openshift.GetServices();
             var routes = _openshift.GetRoutes();
@@ -57,13 +58,28 @@ namespace Tmds.DotnetOC
                 }
             }
 
-            foreach (var deployment in deployments)
+            const string Deployment = "DEPLOYMENT";
+            const string Services = "SERVICES";
+            const string Routes = "ROUTES";
+            const string Replicas = "REPLICAS";
+            string[] Columns = new[] { Deployment, Replicas, Services, Routes };
+            PrintTable(Columns, deployments, (column, deployment) =>
             {
-                System.Console.WriteLine(deployment.DeploymentConfig.Name);
-                System.Console.WriteLine($" git repo: {deployment.BuildConfig.GitUri}");
-                System.Console.WriteLine($" services: {string.Join(',', deployment.Services.Select(svc => svc.Name))}");
-                System.Console.WriteLine($" routes: {string.Join(',', deployment.Routes.Select(rt => rt.Host))}");
+                switch (column)
+                {
+                    case Deployment:
+                        return deployment.DeploymentConfig.Name;
+                    case Replicas:
+                        return $"{deployment.DeploymentConfig.UpdatedReplicas}/{deployment.DeploymentConfig.SpecReplicas}";
+                    case Services:
+                        return string.Join(',', deployment.Services.Select(svc => svc.Name));
+                    case Routes:
+                        return string.Join(',', deployment.Routes.Select(rt => $"{(rt.IsTls ? "https://" : "http://")}{rt.Host}"));
+                    default:
+                        return "???";
+                }
             }
+            );
         }
     }
 }

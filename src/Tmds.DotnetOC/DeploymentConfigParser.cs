@@ -10,7 +10,8 @@ namespace Tmds.DotnetOC
         {
             string name = (string)deploymentConfig["metadata"]["name"];
             JToken spec = deploymentConfig["spec"];
-            int replicas = (int)spec["replicas"];
+            int specReplicas = (int)spec["replicas"];
+            int updatedReplicas = (int)deploymentConfig["status"]["updatedReplicas"];
 
             var triggerList = new List<ImageChangeTrigger>();
             foreach (var trigger in spec["triggers"])
@@ -35,9 +36,10 @@ namespace Tmds.DotnetOC
             return new DeploymentConfig
             {
                 Name = name,
-                Replicas = replicas,
+                SpecReplicas = specReplicas,
                 Triggers = triggerList.ToArray(),
-                Labels = labelsList.ToArray()
+                Labels = labelsList.ToArray(),
+                UpdatedReplicas = updatedReplicas
             };
         }
     }

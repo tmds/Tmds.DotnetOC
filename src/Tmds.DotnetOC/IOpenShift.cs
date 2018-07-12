@@ -61,9 +61,10 @@ namespace Tmds.DotnetOC
    class DeploymentConfig
     {
         public string Name { get; set; }
-        public int Replicas { get; set; }
         public ImageChangeTrigger[] Triggers { get; set; }
         public string[] Labels { get; set; }
+        public int UpdatedReplicas { get; set; }
+        public int SpecReplicas { get; set; }
     }
 
     class ImageChangeTrigger
@@ -82,6 +83,7 @@ namespace Tmds.DotnetOC
         public string Name { get; set; }
         public string Host { get; set; }
         public ServiceBackend[] Backends { get; set; }
+        public bool IsTls { get; set; }
     }
 
     class ServiceBackend
@@ -116,7 +118,7 @@ namespace Tmds.DotnetOC
 
         Pod[] GetPods(string deploymentConfigName, string version);
 
-        S2iBuildConfig[] GetS2iBuildConfigs();
+        S2iBuildConfig[] GetS2iBuildConfigs(string imageName);
 
         DeploymentConfig[] GetDeploymentConfigs();
 

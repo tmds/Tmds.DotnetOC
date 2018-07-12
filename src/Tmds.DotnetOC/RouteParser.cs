@@ -11,6 +11,7 @@ namespace Tmds.DotnetOC
             string name = (string)route["metadata"]["name"];
             JToken spec = route["spec"];
             string host = (string)spec["host"];
+            bool tls = spec["tls"] != null;
 
             var backendList = new List<ServiceBackend>();
             JToken to = spec["to"];
@@ -24,6 +25,7 @@ namespace Tmds.DotnetOC
             {
                 Name = name,
                 Host = host,
+                IsTls = tls,
                 Backends = backendList.ToArray()
             };
         }

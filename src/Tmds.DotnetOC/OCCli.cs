@@ -193,7 +193,7 @@ namespace Tmds.DotnetOC
             }
         }
 
-        public S2iBuildConfig[] GetS2iBuildConfigs()
+        public S2iBuildConfig[] GetS2iBuildConfigs(string imageName)
         {
             Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get bc -o json");
             if (result.IsSuccess)
@@ -202,7 +202,7 @@ namespace Tmds.DotnetOC
                 foreach (var item in result.Value["items"])
                 {
                     var buildConfig = BuildConfigParser.ParseS2iBuildConfig(item as JObject);
-                    if (buildConfig != null)
+                    if (buildConfig != null && buildConfig.ImageName == imageName)
                     {
                         buildConfigs.Add(buildConfig);
                     }
