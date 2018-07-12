@@ -44,5 +44,18 @@ namespace Tmds.DotnetOC
                 return null;
             }
         }
+
+        public static string GetHeadCommitId(string gitRoot)
+        {
+            Result<string> result = ProcessUtils.Run<string>("git", $"rev-parse HEAD", new ProcessStartInfo { WorkingDirectory = gitRoot });
+            if (result.IsSuccess)
+            {
+                return result.Value.Trim();
+            }
+            else
+            {
+                return null;
+            }
+        }
     }
 }
