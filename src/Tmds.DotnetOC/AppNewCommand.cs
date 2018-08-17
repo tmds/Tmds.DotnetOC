@@ -44,9 +44,6 @@ namespace Tmds.DotnetOC
         [Option("-y", "Assume yes", CommandOptionType.NoValue)]
         public bool AssumeYes { get; }
 
-        [Option("-no-install", "Don't update dotnet versions when unsupported", CommandOptionType.NoValue)]
-        public bool NoInstall { get; }
-
         [Argument(0, "project")]
         private string Project { get; } // TODO: try to guess this
 
@@ -217,14 +214,7 @@ namespace Tmds.DotnetOC
                 streamTags = _openshift.GetImageTagVersions("dotnet", imageNamespace);
                 if (!streamTags.Any(FindRuntimeVersion))
                 {
-                    if (NoInstall)
-                    {
-                        Fail($"Runtime version {runtimeVersion} is not installed. You can run the 'install' command to install to the latest versions.");
-                    }
-                    PrintLine($".NET Core {runtimeVersion} is not installed.");
-
-                    imageNamespace = _openshift.GetCurrentNamespace();
-                    InstallDotnet(runtimeVersion, imageNamespace);
+                    Fail($"Runtime version {runtimeVersion} is not installed. You can run the 'install' command to install to the latest versions.");
                 }
             }
             else
@@ -399,35 +389,6 @@ namespace Tmds.DotnetOC
             PrintEmptyLine();
 
             PrintLine("Application created succesfully.");
-        }
-
-        private void InstallDotnet(string runtimeVersion, string ocNamespace)
-        {
-            // Check if this is a community or RH supported version
-            bool community = _openshift.IsCommunity();
-            var installOperations = new InstallOperations(_openshift, _s2iRepo);
-
-            PrintLine("Checking latest available versions...");
-            string[] s2iVersions = installOperations.GetLatestVersions(community);
-            if (!s2iVersions.Contains(runtimeVersion))
-            {
-                if (community)
-                {
-                    s2iVersions = installOperations.GetLatestVersions(community: false);
-                    if (s2iVersions.Contains(runtimeVersion))
-                    {
-                        Fail($".NET Core {runtimeVersion} is not yet available on OpenShift Origin. It is available as part of Red Hat CDK which can be downloaded with the no-cost developer subscription.");
-                    }
-                }
-                Fail($".NET Core {runtimeVersion} is not yet supported.");
-            }
-            VersionCheckResult versionCheck = installOperations.CompareVersions(community, ocNamespace);
-            if (versionCheck == VersionCheckResult.UnknownVersions)
-            {
-                Fail("Unknown versions are installed. You can use the 'install' command options to overwrite these versions and install the missing version.");
-            }
-            PrintLine($"Updating the installed version to include {runtimeVersion}.");
-            installOperations.UpdateToLatest(community, ocNamespace);
         }
 
         private void PrintPodBuildLog(string podName)
