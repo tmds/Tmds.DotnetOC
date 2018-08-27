@@ -8,7 +8,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Tmds.DotnetOC
 {
-    [Command]
+    [Command(Description = "Deploy an application.")]
     class AppNewCommand : CommandBase
     {
         private readonly IOpenShift _openshift;

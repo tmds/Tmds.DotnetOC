@@ -7,6 +7,7 @@ using Humanizer;
 
 namespace Tmds.DotnetOC
 {
+    [Command(Description = "See status of a deployed application.")]
     class AppStatusCommand : CommandBase
     {
         private readonly IOpenShift _openshift;

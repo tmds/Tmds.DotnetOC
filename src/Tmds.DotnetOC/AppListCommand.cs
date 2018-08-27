@@ -6,6 +6,7 @@ using McMaster.Extensions.CommandLineUtils;
 
 namespace Tmds.DotnetOC
 {
+    [Command(Description = "Lists deployed applications.")]
     class AppListCommand : CommandBase
     {
         private readonly IOpenShift _openshift;
