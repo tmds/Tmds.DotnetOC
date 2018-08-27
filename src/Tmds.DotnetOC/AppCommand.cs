@@ -2,7 +2,7 @@ using McMaster.Extensions.CommandLineUtils;
 
 namespace Tmds.DotnetOC
 {
-    [Command(Description = "Deploy/update/remove .NET Core applications.")]
+    [Command(Description = "Deploy and check .NET Core applications.")]
     [Subcommand("new", typeof(AppNewCommand))]
     [Subcommand("list", typeof(AppListCommand))]
     [Subcommand("status", typeof(AppStatusCommand))]
