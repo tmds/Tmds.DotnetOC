@@ -20,6 +20,15 @@ namespace Tmds.DotnetOC
         [Option("-g|--global", Description = "Install system-wide.")]
         public bool Global { get; }
 
+        [Option("-u|--username", CommandOptionType.SingleValue)]
+        public string Username { get; }
+
+        [Option("-p|--password", CommandOptionType.SingleValue)]
+        public string Password { get; }
+
+        [Option("-c|--community", Description = "Install CentOS images.")]
+        public bool Community { get; }
+
         public InstallCommand(IConsole console, IOpenShift openshift, IS2iRepo s2iRepo)
             : base(console)
         {
@@ -33,11 +42,11 @@ namespace Tmds.DotnetOC
             _openshift.EnsureConnection();
 
             // Check if this is a community or RH supported version
-            bool community = _openshift.IsCommunity();
+            bool community = Community;
 
             var installOperations = new InstallOperations(_openshift, _s2iRepo);
 
-            string ocNamespace = Global ? "openshift" : null;
+            string ocNamespace = Global ? "openshift" : _openshift.GetCurrentNamespace();
 
             // Retrieve installed versions
             Print("Retrieving installed versions: ");
@@ -62,6 +71,29 @@ namespace Tmds.DotnetOC
                 else if (result == VersionCheckResult.AlreadyUpToDate)
                 {
                     PrintLine("Already up-to-date. Use '--force' to sync all metadata.");
+                }
+            }
+
+            if (!community)
+            {
+                PrintLine("Checking registry.redhat.io are present...");
+                bool isSecretSetup = _openshift.HasBuilderPullSecret(ocNamespace, "registry.redhat.io");
+                if (!isSecretSetup)
+                {
+                    PrintLine("No credentials for registry.redhat.io are found.");
+                    if (Username == null || Password == null)
+                    {
+                        Fail(@"Specify 'username' and 'password' arguments to configure authentication with registry.redhat.io.
+You can verify your credentials using 'docker login redhat.registry.io'.
+For more info see: https://access.redhat.com/RegistryAuthentication.
+Alternatively, you can install CentOS based images by passing the 'community' argument.");
+                    }
+                    _openshift.CreateBuilderPullSecret(ocNamespace, "redhat-registry", "registry.redhat.io", Username, Password);
+                    PrintLine("A secret for registry.redhat.io has been added.");
+                }
+                else
+                {
+                    PrintLine("A secret for registry.redhat.io is already present.");
                 }
             }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -289,6 +290,56 @@ namespace Tmds.DotnetOC
             {
                 throw new FailedException($"Cannot get routes: {result.ErrorMessage}");
             }
+        }
+
+        public void CreateBuilderPullSecret(string ocNamespace, string name, string server, string username, string password)
+        {
+            Result result = ProcessUtils.Run("oc", $"create secret docker-registry {name} --namespace {ocNamespace} --docker-server {server} --docker-username={username} --docker-password {password} --docker-email=unused");
+            if (!result.IsSuccess)
+            {
+                throw new FailedException($"Cannot create secret: {result.ErrorMessage}");
+            }
+            result = ProcessUtils.Run("oc", $"secret link default {name} --namespace {ocNamespace} --for=pull");
+            if (!result.IsSuccess)
+            {
+                throw new FailedException($"Cannot link secret for pull: {result.ErrorMessage}");
+            }
+            result = ProcessUtils.Run("oc", $"secret link builder {name} --namespace {ocNamespace} ");
+            if (!result.IsSuccess)
+            {
+                throw new FailedException($"Cannot link secret for builder: {result.ErrorMessage}");
+            }
+        }
+
+        public bool HasBuilderPullSecret(string ocNamespace, string server)
+        {
+            Result<JObject> result = ProcessUtils.Run<JObject>("oc", $"get secret -o json --namespace {ocNamespace}");
+            if (!result.IsSuccess)
+            {
+                throw new FailedException($"Cannot get secrets: {result.ErrorMessage}");
+            }
+            foreach (var item in result.Value["items"])
+            {
+                string secretType = (string)item["type"];
+                string dockerCfgEncoded = null;
+                if (secretType == "kubernetes.io/dockercfg")
+                {
+                    dockerCfgEncoded = (string)item?["data"]?[".dockercfg"];
+                }
+                else if (secretType == "kubernetes.io/dockerconfigjson")
+                {
+                    dockerCfgEncoded = (string)item?["data"]?[".dockerconfigjson"];
+                }
+                if (dockerCfgEncoded != null)
+                {
+                    string dockerCfg = Encoding.UTF8.GetString(Convert.FromBase64String(dockerCfgEncoded));
+                    if (dockerCfg.Contains($"\"{server}\""))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
     }
 }

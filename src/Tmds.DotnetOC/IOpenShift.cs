@@ -105,7 +105,6 @@ namespace Tmds.DotnetOC
         void EnsureConnection();
 
         ImageStreamTag[] GetImageTagVersions(string name, string ocNamespace);
-
         void Create(JObject content, string ocNamespace = null);
 
         void Replace(JObject value, string ocNamespace = null);
@@ -121,7 +120,6 @@ namespace Tmds.DotnetOC
         Result GetLog(string podName, string container, Action<StreamReader> reader, bool follow = false, bool ignoreError = false);
 
         Pod GetPod(string podName, bool mustExist = true);
-
         ReplicationController GetReplicationController(string deploymentConfigName, string version, bool mustExist = true);
 
         Pod[] GetPods(string deploymentConfigName, string version);
@@ -133,6 +131,10 @@ namespace Tmds.DotnetOC
         Service[] GetServices();
 
         Route[] GetRoutes();
+
+        void CreateBuilderPullSecret(string ocNamespace, string name, string server, string username, string password);
+
+        bool HasBuilderPullSecret(string ocNamespace, string server);
     }
 
     class S2IDeployment
