@@ -356,7 +356,7 @@ namespace Tmds.DotnetOC
                             // Print pod log when it terminated
                             // or when we see CrashLoopBackOff and missed the terminated state.
                             if (container.State == "terminated" ||
-                                (container.Reason == "CrashLoopBackOff" && !previousState.Contains("terminated"))) // TODO: improve terminated check
+                                (container.Reason == "CrashLoopBackOff" && (previousState == null || !previousState.Contains("terminated")))) // TODO: improve terminated check
                             {
                                 PrintLine($"{pod.Name} log:");
                                 _openshift.GetLog(pod.Name, container.Name, ReadToConsole);
